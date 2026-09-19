@@ -21,7 +21,10 @@ function showResults() {
 function showLyricsView() {
   lyricsView.classList.remove('hidden');
   resultsEl.classList.add('hidden');
-  lyricsView.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function scrollToLyrics() {
+  lyricsContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 form.addEventListener('submit', async (e) => {
@@ -89,10 +92,12 @@ async function loadLyrics(song) {
   // Le repli lyrics.ovh renvoie déjà les paroles directement lors de la recherche.
   if (song.source === 'lyricsovh' && song.lyrics) {
     lyricsContent.textContent = song.lyrics;
+    scrollToLyrics();
     return;
   }
 
   lyricsContent.textContent = 'Chargement des paroles...';
+  scrollToLyrics();
 
   const params = new URLSearchParams();
   if (song.url) params.set('url', song.url);
@@ -105,19 +110,23 @@ async function loadLyrics(song) {
 
     if (!res.ok) {
       lyricsContent.textContent = data.error || 'Erreur lors du chargement des paroles.';
+      scrollToLyrics();
       return;
     }
 
     if (data.lyrics) {
       lyricsContent.textContent = data.lyrics;
+      scrollToLyrics();
       return;
     }
 
     lyricsContent.textContent =
       "Les paroles de cette chanson ne sont pas disponibles via lyrics.ovh.";
     showGeniusLink(data.geniusUrl);
+    scrollToLyrics();
   } catch (err) {
     lyricsContent.textContent = 'Erreur réseau, réessaie.';
+    scrollToLyrics();
   }
 }
 

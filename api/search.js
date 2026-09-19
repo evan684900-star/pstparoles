@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { guessLyricsOvh } = require('../lib/lyrics-ovh');
+const { guessLyrics } = require('../lib/lyrics-sources');
 
 const GENIUS_ACCESS_TOKEN = process.env.GENIUS_ACCESS_TOKEN;
 
@@ -40,13 +40,13 @@ module.exports = async (req, res) => {
     return res.status(200).json({ results: geniusHits });
   }
 
-  // Genius n'a rien trouvé (ou n'est pas disponible) : on tente lyrics.ovh en repli.
-  const fallback = await guessLyricsOvh(query);
+  // Genius n'a rien trouvé (ou n'est pas disponible) : on tente les autres sources en repli.
+  const fallback = await guessLyrics(query);
   if (fallback) {
     return res.status(200).json({
       results: [
         {
-          source: 'lyricsovh',
+          source: fallback.source,
           title: fallback.title,
           artist: fallback.artist,
           thumbnail: null,
@@ -57,7 +57,7 @@ module.exports = async (req, res) => {
   }
 
   if (geniusError && !GENIUS_ACCESS_TOKEN) {
-    return res.status(404).json({ error: "Aucun résultat trouvé sur lyrics.ovh, et Genius n'est pas configuré." });
+    return res.status(404).json({ error: "Aucun résultat trouvé, et Genius n'est pas configuré." });
   }
   if (geniusError) {
     return res.status(502).json({ error: geniusError });

@@ -1,4 +1,4 @@
-const { fetchLyricsOvh } = require('../lib/lyrics-ovh');
+const { fetchLyrics } = require('../lib/lyrics-sources');
 
 module.exports = async (req, res) => {
   const { artist, title, url } = req.query;
@@ -8,14 +8,14 @@ module.exports = async (req, res) => {
   }
 
   // Genius bloque le scraping de ses pages (403) et ses conditions demandent
-  // de renvoyer vers leur site : on récupère le texte via lyrics.ovh, sinon
-  // on propose le lien Genius.
-  const lyrics = await fetchLyricsOvh(artist, title);
+  // de renvoyer vers leur site : on récupère le texte via LRCLIB puis
+  // lyrics.ovh, sinon on propose le lien Genius.
+  const result = await fetchLyrics(artist, title);
 
   res.setHeader('Cache-Control', 'no-store');
 
-  if (lyrics) {
-    return res.status(200).json({ lyrics, source: 'lyricsovh' });
+  if (result) {
+    return res.status(200).json({ lyrics: result.lyrics, source: result.source });
   }
 
   return res.status(200).json({

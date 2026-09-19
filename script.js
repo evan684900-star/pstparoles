@@ -51,6 +51,7 @@ form.addEventListener('submit', async (e) => {
 
     setStatus(`${data.results.length} résultat(s)`);
     renderResults(data.results);
+    input.blur();
   } catch (err) {
     setStatus('Erreur réseau, réessaie.');
   }

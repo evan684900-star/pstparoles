@@ -308,6 +308,59 @@ main {
   color: var(--text);
 }
 
+#spotify-progress {
+  background: linear-gradient(135deg, rgba(29, 185, 84, 0.14), rgba(29, 185, 84, 0.04));
+  border: 1px solid rgba(29, 185, 84, 0.3);
+  border-radius: var(--radius-md);
+  padding: 0.8rem 1rem 0.9rem;
+  margin-bottom: 1.25rem;
+  animation: rise 0.25s ease both;
+}
+
+.spotify-progress-top {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--spotify-green);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+#spotify-progress-track {
+  margin: 0.35rem 0 0.55rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spotify-progress-bar {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+#spotify-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--spotify-green);
+  border-radius: 999px;
+  transition: width 0.9s linear;
+}
+
+.spotify-progress-times {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
 #lyrics-title {
   margin: 0 0 1rem;
   font-size: clamp(1.3rem, 4vw, 1.6rem);

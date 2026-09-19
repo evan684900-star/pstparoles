@@ -79,6 +79,23 @@
         <button id="spotify-connect">Connecter</button>
       </div>
 
+      <div id="spotify-progress" class="hidden">
+        <div class="spotify-progress-top">
+          <svg class="spotify-logo" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24 0-.36-.06-.6-.18-1.68-1.02-3.72-1.56-6.06-1.56-1.32 0-2.76.18-3.96.48-.18.06-.42.12-.54.12-.42 0-.66-.3-.66-.66 0-.42.24-.66.6-.72 1.44-.36 2.94-.54 4.56-.54 2.58 0 4.86.6 6.72 1.74.24.12.42.36.42.66 0 .36-.24.66-.48.66zm1.2-2.82c-.3 0-.48-.12-.72-.24-1.86-1.14-4.68-1.8-7.62-1.8-1.5 0-3.06.18-4.5.6-.18.06-.3.06-.48.06-.48 0-.84-.36-.84-.84 0-.48.24-.78.72-.9 1.68-.48 3.36-.72 5.16-.72 3.24 0 6.3.78 8.4 2.04.36.24.6.54.6.96-.06.48-.36.84-.72.84zM17 11.1c-1.98-1.14-5.28-1.32-7.2-.72-.24.06-.48.12-.66.12-.66 0-1.02-.48-1.02-1.02 0-.6.36-.9.78-1.02 2.28-.66 6-.48 8.34.84.42.24.66.6.66 1.02 0 .48-.36 1.02-.9 1.02-.24 0-.42-.06-.54-.12z"/>
+          </svg>
+          <span id="spotify-progress-label">En écoute</span>
+        </div>
+        <div id="spotify-progress-track"></div>
+        <div class="spotify-progress-bar">
+          <div id="spotify-progress-fill"></div>
+        </div>
+        <div class="spotify-progress-times">
+          <span id="spotify-progress-elapsed">0:00</span>
+          <span id="spotify-progress-duration">0:00</span>
+        </div>
+      </div>
+
       <h2 id="lyrics-title"></h2>
       <pre id="lyrics-content"></pre>
       <p id="lyrics-link" class="hidden">

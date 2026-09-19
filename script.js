@@ -11,6 +11,11 @@ const spotifyBanner = document.getElementById('spotify-banner');
 const spotifyConnectBtn = document.getElementById('spotify-connect');
 const spotifyDismissBtn = document.getElementById('spotify-dismiss');
 const spotifyNowPlayingBtn = document.getElementById('spotify-now-playing');
+const spotifyProgress = document.getElementById('spotify-progress');
+const spotifyProgressTrack = document.getElementById('spotify-progress-track');
+const spotifyProgressFill = document.getElementById('spotify-progress-fill');
+const spotifyProgressElapsed = document.getElementById('spotify-progress-elapsed');
+const spotifyProgressDuration = document.getElementById('spotify-progress-duration');
 
 function setStatus(message) {
   statusEl.textContent = message || '';
@@ -20,12 +25,14 @@ function showResults() {
   lyricsView.classList.add('hidden');
   resultsEl.classList.remove('hidden');
   form.classList.remove('hidden');
+  stopSpotifyProgressTracking();
 }
 
 function showLyricsView() {
   lyricsView.classList.remove('hidden');
   resultsEl.classList.add('hidden');
   updateSpotifyBanner();
+  startSpotifyProgressTracking();
 }
 
 function scrollToLyrics() {
@@ -303,7 +310,7 @@ async function getValidSpotifyToken() {
   return refreshSpotifyToken();
 }
 
-async function fetchCurrentlyPlaying() {
+async function fetchPlaybackState() {
   const token = await getValidSpotifyToken();
   if (!token) return null;
 
@@ -320,6 +327,9 @@ async function fetchCurrentlyPlaying() {
   return {
     title: data.item.name,
     artist: data.item.artists.map((a) => a.name).join(', '),
+    progressMs: data.progress_ms || 0,
+    durationMs: data.item.duration_ms || 0,
+    isPlaying: Boolean(data.is_playing),
   };
 }
 
@@ -331,6 +341,71 @@ function updateSpotifyBanner() {
 function updateSpotifyUI() {
   spotifyNowPlayingBtn.classList.toggle('hidden', !isSpotifyConnected());
   updateSpotifyBanner();
+  if (!isSpotifyConnected()) stopSpotifyProgressTracking();
+}
+
+// ---- Barre de progression "en écoute" au-dessus des paroles ----
+
+let spotifyPollTimer = null;
+let spotifyTickTimer = null;
+let spotifyLocalProgressMs = 0;
+let spotifyLocalDurationMs = 0;
+let spotifyIsPlaying = false;
+
+function formatMs(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function renderSpotifyProgressTimes() {
+  const pct = spotifyLocalDurationMs
+    ? Math.min(100, (spotifyLocalProgressMs / spotifyLocalDurationMs) * 100)
+    : 0;
+  spotifyProgressFill.style.width = `${pct}%`;
+  spotifyProgressElapsed.textContent = formatMs(spotifyLocalProgressMs);
+  spotifyProgressDuration.textContent = formatMs(spotifyLocalDurationMs);
+}
+
+async function refreshSpotifyProgress() {
+  const state = await fetchPlaybackState();
+
+  if (!state) {
+    spotifyProgress.classList.add('hidden');
+    spotifyIsPlaying = false;
+    return;
+  }
+
+  spotifyLocalProgressMs = state.progressMs;
+  spotifyLocalDurationMs = state.durationMs;
+  spotifyIsPlaying = state.isPlaying;
+  spotifyProgressTrack.textContent = `${state.title} — ${state.artist}`;
+  renderSpotifyProgressTimes();
+  spotifyProgress.classList.remove('hidden');
+}
+
+function tickSpotifyProgress() {
+  if (!spotifyIsPlaying || spotifyProgress.classList.contains('hidden')) return;
+  spotifyLocalProgressMs = Math.min(spotifyLocalProgressMs + 1000, spotifyLocalDurationMs);
+  renderSpotifyProgressTimes();
+}
+
+function startSpotifyProgressTracking() {
+  stopSpotifyProgressTracking();
+  if (!isSpotifyConnected()) return;
+
+  refreshSpotifyProgress();
+  spotifyPollTimer = setInterval(refreshSpotifyProgress, 8000);
+  spotifyTickTimer = setInterval(tickSpotifyProgress, 1000);
+}
+
+function stopSpotifyProgressTracking() {
+  if (spotifyPollTimer) clearInterval(spotifyPollTimer);
+  if (spotifyTickTimer) clearInterval(spotifyTickTimer);
+  spotifyPollTimer = null;
+  spotifyTickTimer = null;
+  spotifyProgress.classList.add('hidden');
 }
 
 spotifyConnectBtn.addEventListener('click', connectSpotify);
@@ -344,7 +419,7 @@ spotifyNowPlayingBtn.addEventListener('click', async () => {
   spotifyNowPlayingBtn.disabled = true;
   setStatus('Récupération de la chanson en cours...');
   try {
-    const track = await fetchCurrentlyPlaying();
+    const track = await fetchPlaybackState();
     if (!track) {
       setStatus("Aucune lecture en cours sur Spotify (ou session expirée).");
       return;

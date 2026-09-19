@@ -73,7 +73,7 @@ function renderResults(results) {
   resultsEl.innerHTML = '';
   for (const song of results) {
     const li = document.createElement('li');
-    const sourceLabels = { lyricsovh: 'lyrics.ovh', lrclib: 'LRCLIB', genius: 'Genius' };
+    const sourceLabels = { lyricsovh: 'lyrics.ovh', lrclib: 'LRCLIB', textyl: 'Textyl', genius: 'Genius' };
     const sourceLabel = sourceLabels[song.source] || song.source;
     li.innerHTML = `
       ${song.thumbnail ? `<img src="${song.thumbnail}" alt="" />` : '<div class="result-thumb-fallback"></div>'}

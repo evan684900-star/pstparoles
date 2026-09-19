@@ -21,6 +21,7 @@ function showResults() {
 function showLyricsView() {
   lyricsView.classList.remove('hidden');
   resultsEl.classList.add('hidden');
+  lyricsView.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 form.addEventListener('submit', async (e) => {

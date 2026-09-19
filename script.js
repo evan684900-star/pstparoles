@@ -5,6 +5,7 @@ const resultsEl = document.getElementById('results');
 const lyricsView = document.getElementById('lyrics-view');
 const lyricsTitle = document.getElementById('lyrics-title');
 const lyricsContent = document.getElementById('lyrics-content');
+const lyricsLink = document.getElementById('lyrics-link');
 const backButton = document.getElementById('back-button');
 
 function setStatus(message) {
@@ -68,9 +69,19 @@ function renderResults(results) {
   }
 }
 
+function showGeniusLink(url) {
+  if (!url) {
+    lyricsLink.classList.add('hidden');
+    return;
+  }
+  lyricsLink.querySelector('a').href = url;
+  lyricsLink.classList.remove('hidden');
+}
+
 async function loadLyrics(song) {
   setStatus('');
   lyricsTitle.textContent = `${song.title} — ${song.artist}`;
+  showGeniusLink(null);
   showLyricsView();
 
   // Le repli lyrics.ovh renvoie déjà les paroles directement lors de la recherche.
@@ -95,7 +106,14 @@ async function loadLyrics(song) {
       return;
     }
 
-    lyricsContent.textContent = data.lyrics;
+    if (data.lyrics) {
+      lyricsContent.textContent = data.lyrics;
+      return;
+    }
+
+    lyricsContent.textContent =
+      "Les paroles de cette chanson ne sont pas disponibles via lyrics.ovh.";
+    showGeniusLink(data.geniusUrl);
   } catch (err) {
     lyricsContent.textContent = 'Erreur réseau, réessaie.';
   }

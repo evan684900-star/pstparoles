@@ -138,6 +138,11 @@ button:hover {
   margin-top: 0;
 }
 
+#lyrics-link a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 #lyrics-content {
   white-space: pre-wrap;
   font-family: inherit;

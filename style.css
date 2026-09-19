@@ -61,8 +61,10 @@ body {
 }
 
 .brand-icon {
-  font-size: 1.3rem;
-  line-height: 1;
+  width: 24px;
+  height: 24px;
+  color: var(--accent);
+  flex-shrink: 0;
 }
 
 #search-form {

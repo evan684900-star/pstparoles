@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>pstparoles — Recherche de paroles</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main>
+    <h1>pstparoles</h1>
+    <p class="subtitle">Trouve les paroles de ta chanson préférée</p>
+
+    <form id="search-form">
+      <input
+        type="text"
+        id="search-input"
+        placeholder="Artiste - Titre (ex: Stromae Papaoutai)"
+        autocomplete="off"
+        required
+      />
+      <button type="submit">Rechercher</button>
+    </form>
+
+    <div id="status"></div>
+    <ul id="results"></ul>
+
+    <div id="lyrics-view" class="hidden">
+      <button id="back-button">&larr; Retour aux résultats</button>
+      <h2 id="lyrics-title"></h2>
+      <pre id="lyrics-content"></pre>
+    </div>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

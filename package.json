@@ -1,0 +1,16 @@
+{
+  "name": "pstparoles",
+  "version": "1.0.0",
+  "description": "Site de recherche de paroles de musique via l'API Genius",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1"
+  }
+}

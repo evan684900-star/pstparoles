@@ -1,0 +1,142 @@
+:root {
+  color-scheme: light dark;
+  --bg: #0f1115;
+  --card: #1a1d24;
+  --text: #eef0f4;
+  --muted: #9aa1ad;
+  --accent: #ffb545;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+main {
+  width: 100%;
+  max-width: 640px;
+}
+
+h1 {
+  margin-bottom: 0.2rem;
+  font-size: 2rem;
+}
+
+.subtitle {
+  color: var(--muted);
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+}
+
+#search-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+#search-input {
+  flex: 1;
+  padding: 0.7rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #333;
+  background: var(--card);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+button {
+  padding: 0.7rem 1.2rem;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #1a1200;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+#status {
+  color: var(--muted);
+  min-height: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+#results {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#results li {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  background: var(--card);
+  padding: 0.6rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#results li:hover {
+  background: #23262f;
+}
+
+#results img {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.result-info strong {
+  display: block;
+}
+
+.result-info span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.hidden {
+  display: none;
+}
+
+#lyrics-view {
+  margin-top: 1rem;
+}
+
+#back-button {
+  background: transparent;
+  color: var(--muted);
+  padding: 0.4rem 0;
+  margin-bottom: 1rem;
+}
+
+#lyrics-title {
+  margin-top: 0;
+}
+
+#lyrics-content {
+  white-space: pre-wrap;
+  font-family: inherit;
+  line-height: 1.6;
+  background: var(--card);
+  padding: 1rem;
+  border-radius: 10px;
+}

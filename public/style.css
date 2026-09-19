@@ -97,11 +97,17 @@ button:hover {
   background: #23262f;
 }
 
-#results img {
+#results img,
+.result-thumb-fallback {
   width: 48px;
   height: 48px;
   border-radius: 6px;
   object-fit: cover;
+  flex-shrink: 0;
+}
+
+.result-thumb-fallback {
+  background: #2a2e38;
 }
 
 .result-info strong {

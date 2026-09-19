@@ -55,11 +55,12 @@ function renderResults(results) {
   resultsEl.innerHTML = '';
   for (const song of results) {
     const li = document.createElement('li');
+    const sourceLabel = song.source === 'lyricsovh' ? 'lyrics.ovh' : 'Genius';
     li.innerHTML = `
-      <img src="${song.thumbnail}" alt="" />
+      ${song.thumbnail ? `<img src="${song.thumbnail}" alt="" />` : '<div class="result-thumb-fallback"></div>'}
       <div class="result-info">
         <strong>${song.title}</strong>
-        <span>${song.artist}</span>
+        <span>${song.artist} · ${sourceLabel}</span>
       </div>
     `;
     li.addEventListener('click', () => loadLyrics(song));
@@ -70,11 +71,23 @@ function renderResults(results) {
 async function loadLyrics(song) {
   setStatus('');
   lyricsTitle.textContent = `${song.title} — ${song.artist}`;
-  lyricsContent.textContent = 'Chargement des paroles...';
   showLyricsView();
 
+  // Le repli lyrics.ovh renvoie déjà les paroles directement lors de la recherche.
+  if (song.source === 'lyricsovh' && song.lyrics) {
+    lyricsContent.textContent = song.lyrics;
+    return;
+  }
+
+  lyricsContent.textContent = 'Chargement des paroles...';
+
+  const params = new URLSearchParams();
+  if (song.url) params.set('url', song.url);
+  params.set('artist', song.artist);
+  params.set('title', song.title);
+
   try {
-    const res = await fetch(`/api/lyrics?url=${encodeURIComponent(song.url)}`);
+    const res = await fetch(`/api/lyrics?${params.toString()}`);
     const data = await res.json();
 
     if (!res.ok) {

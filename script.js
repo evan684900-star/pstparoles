@@ -286,6 +286,7 @@ function applyLyricsPayload(data) {
     renderSyncedLyrics(currentSyncedLines);
   } else {
     renderLyrics(data.lyrics);
+    updateSyncBar(); // affiche tout de suite le repli "pas de synchro" si pertinent
   }
 
   resetTranslateBar();
@@ -1110,6 +1111,20 @@ function karaokeAvailable() {
 }
 
 function updateSyncBar() {
+  // La chanson en cours sur Spotify est bien celle affichée, mais aucune
+  // source n'a de version horodatée pour elle : on le dit plutôt que de
+  // laisser deviner pourquoi rien ne se surligne.
+  if (!syncedLines.length && isPlayingCurrentSong()) {
+    syncBar.classList.remove('hidden', 'paused');
+    syncBar.classList.add('unavailable');
+    lyricsContent.classList.remove('synced');
+    clearKaraokeClasses();
+    syncStatus.textContent = 'Pas de paroles synchronisées pour cette chanson';
+    return;
+  }
+
+  syncBar.classList.remove('unavailable');
+
   if (!karaokeAvailable()) {
     syncBar.classList.add('hidden');
     lyricsContent.classList.remove('synced');
@@ -1203,6 +1218,7 @@ function clearSyncedLyrics() {
   activeLineIndex = -1;
   lyricsContent.classList.remove('synced');
   syncBar.classList.add('hidden');
+  syncBar.classList.remove('unavailable', 'paused');
 }
 
 /* ---------- suivi automatique de la lecture ---------- */

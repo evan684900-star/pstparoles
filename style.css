@@ -788,6 +788,10 @@ h1 {
 #sync-bar.paused { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.03); color: var(--muted); }
 #sync-bar.paused .sync-pulse { background: var(--muted); box-shadow: none; animation: none; }
 
+#sync-bar.unavailable { border-color: rgba(255,255,255,.1); background: rgba(255,255,255,.02); color: var(--faint); }
+#sync-bar.unavailable .sync-pulse { background: var(--faint); box-shadow: none; animation: none; }
+#sync-bar.unavailable .sync-offset { display: none; }
+
 .sync-offset {
   display: flex;
   align-items: center;

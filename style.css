@@ -170,6 +170,9 @@ h1 {
   transition: transform .42s cubic-bezier(.3,.9,.3,1.2);
 }
 #menu-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+
+/* La roue tourne plus lentement, sans rebond : un demi-tour posé. */
+#settings-toggle svg { transition: transform .9s cubic-bezier(.25,.8,.3,1); }
 #settings-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 
 .dropdown-panel {

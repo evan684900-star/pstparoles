@@ -180,6 +180,21 @@ function showResults() {
   stopSpotifyProgressTracking();
 }
 
+function goHome() {
+  input.value = '';
+  lastResults = [];
+  resultsEl.innerHTML = '';
+  setStatus('');
+  showResults();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+const brandHome = document.getElementById('brand-home');
+brandHome.addEventListener('click', goHome);
+brandHome.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); }
+});
+
 function showLyricsView() {
   lyricsView.hidden = false;
   resultsEl.hidden = true;

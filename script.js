@@ -31,6 +31,11 @@ const spotifyProgressTrack = document.getElementById('spotify-progress-track');
 const spotifyProgressFill = document.getElementById('spotify-progress-fill');
 const spotifyProgressElapsed = document.getElementById('spotify-progress-elapsed');
 const spotifyProgressDuration = document.getElementById('spotify-progress-duration');
+const spotifyPrev = document.getElementById('spotify-prev');
+const spotifyPlayPause = document.getElementById('spotify-playpause');
+const spotifyNext = document.getElementById('spotify-next');
+const playPauseIconPlay = spotifyPlayPause.querySelector('.ico-play');
+const playPauseIconPause = spotifyPlayPause.querySelector('.ico-pause');
 
 const translateControl = document.querySelector('.translate-control');
 const translateSelect = document.getElementById('translate-select');
@@ -868,7 +873,7 @@ document.addEventListener('click', (e) => {
 
 const SPOTIFY_AUTH_URL = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
-const SPOTIFY_SCOPE = 'user-read-currently-playing';
+const SPOTIFY_SCOPE = 'user-read-currently-playing user-modify-playback-state';
 const LS_ACCESS_TOKEN = 'spotify_access_token';
 const LS_REFRESH_TOKEN = 'spotify_refresh_token';
 const LS_EXPIRES_AT = 'spotify_expires_at';
@@ -1041,6 +1046,69 @@ async function fetchPlaybackState() {
   };
 }
 
+/* ---------- contrôle de la lecture (play/pause, suivant, précédent) ---------- */
+
+async function spotifyPlayerCommand(method, path) {
+  const token = await getValidSpotifyToken();
+  if (!token) return { ok: false, status: 401 };
+  const res = await fetch(`https://api.spotify.com/v1/me/player/${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return { ok: res.ok, status: res.status };
+}
+
+function setPlayPauseIcon(isPlaying) {
+  playPauseIconPlay.classList.toggle('hidden', isPlaying);
+  playPauseIconPause.classList.toggle('hidden', !isPlaying);
+}
+
+function setSpotifyControlsBusy(busy) {
+  spotifyPrev.disabled = busy;
+  spotifyPlayPause.disabled = busy;
+  spotifyNext.disabled = busy;
+}
+
+function reportSpotifyCommandError(status, fallback) {
+  if (status === 403) setStatus('Contrôle de la lecture réservé aux comptes Spotify Premium.', true);
+  else if (status === 404) setStatus("Aucun appareil Spotify actif — lance la lecture depuis l'appli d'abord.", true);
+  else setStatus(fallback, true);
+}
+
+spotifyPlayPause.addEventListener('click', async () => {
+  if (!playbackAnchor) return;
+  const wasPlaying = playbackAnchor.isPlaying;
+  const willPlay = !wasPlaying;
+
+  setSpotifyControlsBusy(true);
+  setPlayPauseIcon(willPlay); // retour visuel immédiat, corrigé si la commande échoue
+
+  const { ok, status } = await spotifyPlayerCommand('PUT', willPlay ? 'play' : 'pause');
+  if (!ok) {
+    setPlayPauseIcon(wasPlaying);
+    reportSpotifyCommandError(status, 'Impossible de contrôler la lecture Spotify.');
+  } else {
+    setTimeout(refreshPlaybackAnchor, 350);
+  }
+  setSpotifyControlsBusy(false);
+});
+
+spotifyNext.addEventListener('click', async () => {
+  setSpotifyControlsBusy(true);
+  const { ok, status } = await spotifyPlayerCommand('POST', 'next');
+  if (!ok) reportSpotifyCommandError(status, 'Impossible de passer au titre suivant.');
+  else setTimeout(refreshPlaybackAnchor, 450);
+  setSpotifyControlsBusy(false);
+});
+
+spotifyPrev.addEventListener('click', async () => {
+  setSpotifyControlsBusy(true);
+  const { ok, status } = await spotifyPlayerCommand('POST', 'previous');
+  if (!ok) reportSpotifyCommandError(status, 'Impossible de revenir au titre précédent.');
+  else setTimeout(refreshPlaybackAnchor, 450);
+  setSpotifyControlsBusy(false);
+});
+
 function updateSpotifyBanner() {
   const dismissed = sessionStorage.getItem('spotify_banner_dismissed') === '1';
   spotifyBanner.classList.toggle('hidden', isSpotifyConnected() || dismissed);
@@ -1126,6 +1194,7 @@ async function refreshPlaybackAnchor() {
   spotifyProgressTrack.textContent = `${state.title} — ${state.artist}`;
   spotifyProgressDuration.textContent = formatMs(state.durationMs);
   spotifyProgress.classList.remove('hidden');
+  setPlayPauseIcon(state.isPlaying);
 
   const trackChanged = !previous || previous.title !== state.title || previous.artist !== state.artist;
   if (trackChanged && autoFollowEnabled) {

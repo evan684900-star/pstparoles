@@ -164,6 +164,14 @@ h1 {
 .icon-btn:hover { color: var(--text); border-color: rgba(255,255,255,.18); }
 .icon-btn[aria-expanded="true"] { color: var(--accent); border-color: rgba(255,181,69,.4); }
 
+/* Les icônes pivotent à l'ouverture : barres du menu à la verticale,
+   roue crantée qui fait un demi-tour sur elle-même. */
+.icon-btn svg {
+  transition: transform .42s cubic-bezier(.3,.9,.3,1.2);
+}
+#menu-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+#settings-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+
 .dropdown-panel {
   position: absolute;
   top: calc(100% + 10px);

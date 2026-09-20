@@ -862,7 +862,7 @@ h1 {
 .karaoke-fx {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
   grid-auto-rows: minmax(56px, 1fr);
@@ -874,7 +874,7 @@ h1 {
   transition: opacity .35s ease;
 }
 
-.karaoke-fx.active { opacity: 1; }
+.karaoke-fx.active { opacity: .28; }
 
 .karaoke-fx .kf-cell {
   border-radius: 5px;

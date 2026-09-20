@@ -3,105 +3,108 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#0f1115" />
-  <meta name="description" content="Recherche les paroles de tes chansons préférées." />
+  <meta name="theme-color" content="#0a0a0c" />
+  <title>pstparoles — Recherche de paroles</title>
+  <meta name="description" content="Trouve les paroles de ta chanson préférée, sans pub ni détour." />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <title>pstparoles — Recherche de paroles</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header id="top-bar">
-    <div class="brand">
-      <svg class="brand-icon" viewBox="0 0 220 230" aria-hidden="true">
-        <path d="M150,175 A55,55 0 1 1 95,120" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" />
-        <path d="M173,175 A78,78 0 1 1 95,97" fill="none" stroke="currentColor" stroke-width="13" stroke-linecap="round" />
-        <path d="M196,175 A101,101 0 1 1 95,74" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" />
-        <circle cx="95" cy="175" r="30" fill="currentColor" />
-        <line x1="122" y1="172" x2="122" y2="35" stroke="currentColor" stroke-width="16" stroke-linecap="round" />
-        <path d="M122,35 C160,50 178,80 168,108 C163,88 148,72 122,63 Z" fill="currentColor" />
-      </svg>
-      <span class="brand-name">pstparoles</span>
+  <div class="halo" id="halo"></div>
+  <div class="vignette"></div>
 
-      <div class="menu-wrapper">
-        <button id="menu-toggle" type="button" aria-label="Menu" aria-expanded="false">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-            <line x1="4" y1="7" x2="20" y2="7" />
-            <line x1="4" y1="12" x2="20" y2="12" />
-            <line x1="4" y1="17" x2="20" y2="17" />
-          </svg>
-        </button>
-
-        <div id="library-panel" class="dropdown-panel">
-          <div class="library-panel-header">
-            <span>Bibliothèque</span>
-            <span id="library-count" class="library-count">0</span>
-          </div>
-          <ul id="library-list"></ul>
-          <p id="library-empty" class="library-empty">Aucune chanson enregistrée pour l'instant.</p>
+  <main>
+    <header class="head">
+      <div>
+        <div class="brand">
+          <div class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <h1>pstparoles</h1>
         </div>
+        <p class="subtitle">Trouve les paroles de ta chanson préférée, sans pub ni détour.</p>
       </div>
 
-      <div class="menu-wrapper">
-        <button id="settings-toggle" type="button" aria-label="Paramètres" aria-expanded="false">
-          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
-        </button>
+      <div class="head-actions">
+        <div class="badge"><span class="dot"></span>Genius + LRCLIB + plus</div>
 
-        <div id="settings-panel" class="dropdown-panel">
-          <div class="library-panel-header">
-            <span>Sources des paroles</span>
+        <div class="menu-wrapper">
+          <button id="menu-toggle" class="icon-btn" type="button" aria-label="Bibliothèque" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
+              <line x1="4" y1="7" x2="20" y2="7" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="17" x2="20" y2="17" />
+            </svg>
+          </button>
+
+          <div id="library-panel" class="dropdown-panel">
+            <div class="panel-header">
+              <span>Bibliothèque</span>
+              <span id="library-count" class="panel-count">0</span>
+            </div>
+            <ul id="library-list"></ul>
+            <p id="library-empty" class="panel-empty">Aucune chanson enregistrée pour l'instant.</p>
           </div>
-          <p class="settings-hint">Moins de sources activées = résultats plus rapides, mais moins de chances de trouver la chanson.</p>
-          <ul id="settings-sources-list" class="settings-sources-list"></ul>
+        </div>
+
+        <div class="menu-wrapper">
+          <button id="settings-toggle" class="icon-btn" type="button" aria-label="Paramètres" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+
+          <div id="settings-panel" class="dropdown-panel">
+            <div class="panel-header">
+              <span>Sources des paroles</span>
+            </div>
+            <p class="settings-hint">Moins de sources activées = résultats plus rapides, mais moins de chances de trouver la chanson.</p>
+            <ul id="settings-sources-list" class="settings-sources-list"></ul>
+          </div>
         </div>
       </div>
-    </div>
+    </header>
 
-    <form id="search-form">
-      <input
-        type="search"
-        id="search-input"
-        placeholder="Artiste - Titre (ex: Stromae Papaoutai)"
-        autocomplete="off"
-        inputmode="search"
-        required
-      />
-      <button type="submit" aria-label="Rechercher">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-          <circle cx="11" cy="11" r="7" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    <form id="search-form" autocomplete="off">
+      <div class="field">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+        <input type="text" id="search-input" placeholder="Artiste, titre, un bout de refrain…" autocomplete="off" required />
+        <div class="sweep" id="sweep"><i></i></div>
+      </div>
+      <button type="submit">Rechercher</button>
+      <button id="spotify-now-playing" class="hidden" type="button" title="Chercher ce que j'écoute sur Spotify">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
+          <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24 0-.36-.06-.6-.18-1.68-1.02-3.72-1.56-6.06-1.56-1.32 0-2.76.18-3.96.48-.18.06-.42.12-.54.12-.42 0-.66-.3-.66-.66 0-.42.24-.66.6-.72 1.44-.36 2.94-.54 4.56-.54 2.58 0 4.86.6 6.72 1.74.24.12.42.36.42.66 0 .36-.24.66-.48.66zm1.2-2.82c-.3 0-.48-.12-.72-.24-1.86-1.14-4.68-1.8-7.62-1.8-1.5 0-3.06.18-4.5.6-.18.06-.3.06-.48.06-.48 0-.84-.36-.84-.84 0-.48.24-.78.72-.9 1.68-.48 3.36-.72 5.16-.72 3.24 0 6.3.78 8.4 2.04.36.24.6.54.6.96-.06.48-.36.84-.72.84zM17 11.1c-1.98-1.14-5.28-1.32-7.2-.72-.24.06-.48.12-.66.12-.66 0-1.02-.48-1.02-1.02 0-.6.36-.9.78-1.02 2.28-.66 6-.48 8.34.84.42.24.66.6.66 1.02 0 .48-.36 1.02-.9 1.02-.24 0-.42-.06-.54-.12z"/>
         </svg>
-        <span class="btn-label">Rechercher</span>
+        <span class="btn-label">En écoute</span>
       </button>
     </form>
 
-    <button id="spotify-now-playing" class="hidden" type="button" title="Chercher ce que j'écoute sur Spotify">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24 0-.36-.06-.6-.18-1.68-1.02-3.72-1.56-6.06-1.56-1.32 0-2.76.18-3.96.48-.18.06-.42.12-.54.12-.42 0-.66-.3-.66-.66 0-.42.24-.66.6-.72 1.44-.36 2.94-.54 4.56-.54 2.58 0 4.86.6 6.72 1.74.24.12.42.36.42.66 0 .36-.24.66-.48.66zm1.2-2.82c-.3 0-.48-.12-.72-.24-1.86-1.14-4.68-1.8-7.62-1.8-1.5 0-3.06.18-4.5.6-.18.06-.3.06-.48.06-.48 0-.84-.36-.84-.84 0-.48.24-.78.72-.9 1.68-.48 3.36-.72 5.16-.72 3.24 0 6.3.78 8.4 2.04.36.24.6.54.6.96-.06.48-.36.84-.72.84zM17 11.1c-1.98-1.14-5.28-1.32-7.2-.72-.24.06-.48.12-.66.12-.66 0-1.02-.48-1.02-1.02 0-.6.36-.9.78-1.02 2.28-.66 6-.48 8.34.84.42.24.66.6.66 1.02 0 .48-.36 1.02-.9 1.02-.24 0-.42-.06-.54-.12z"/>
-      </svg>
-      <span class="btn-label">En écoute</span>
-    </button>
-  </header>
+    <div class="recents" id="recents" hidden>
+      <span class="eyebrow">Récent</span>
+      <div class="chips" id="recent-chips"></div>
+    </div>
 
-  <main>
-    <p class="subtitle">Trouve les paroles de ta chanson préférée en un instant.</p>
+    <div id="status" role="status" aria-live="polite"></div>
 
-    <div id="status"></div>
+    <div id="skeletons" hidden>
+      <div class="loader"><div class="vinyl"><i></i><b></b></div><span>Ça cherche…</span></div>
+      <div class="sk"><div class="sk-thumb"></div><div class="sk-lines"><i style="width:52%"></i><b style="width:32%"></b></div></div>
+      <div class="sk" style="animation-delay:.18s"><div class="sk-thumb"></div><div class="sk-lines"><i style="width:66%"></i><b style="width:26%"></b></div></div>
+      <div class="sk" style="animation-delay:.36s"><div class="sk-thumb"></div><div class="sk-lines"><i style="width:44%"></i><b style="width:36%"></b></div></div>
+    </div>
+
     <ul id="results"></ul>
 
-    <div id="lyrics-view" class="hidden">
-      <button id="back-button">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="19" y1="12" x2="5" y2="12" />
-          <polyline points="12 19 5 12 12 5" />
-        </svg>
-        Retour aux résultats
-      </button>
+    <div id="empty" class="empty">
+      <p class="empty-title">Qu'est-ce qui te trotte dans la tête ?</p>
+      <p class="empty-sub">Essaie avec l'artiste et le titre, ou juste un bout de refrain.</p>
+    </div>
+
+    <section id="lyrics-view" hidden>
+      <button id="back-button" class="back">← Retour aux résultats</button>
 
       <div id="spotify-banner" class="hidden">
         <button id="spotify-dismiss" aria-label="Fermer">&times;</button>
@@ -117,10 +120,10 @@
 
       <div id="spotify-progress" class="hidden">
         <div class="spotify-progress-top">
-          <svg class="spotify-logo" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+          <svg class="spotify-logo" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
             <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24 0-.36-.06-.6-.18-1.68-1.02-3.72-1.56-6.06-1.56-1.32 0-2.76.18-3.96.48-.18.06-.42.12-.54.12-.42 0-.66-.3-.66-.66 0-.42.24-.66.6-.72 1.44-.36 2.94-.54 4.56-.54 2.58 0 4.86.6 6.72 1.74.24.12.42.36.42.66 0 .36-.24.66-.48.66zm1.2-2.82c-.3 0-.48-.12-.72-.24-1.86-1.14-4.68-1.8-7.62-1.8-1.5 0-3.06.18-4.5.6-.18.06-.3.06-.48.06-.48 0-.84-.36-.84-.84 0-.48.24-.78.72-.9 1.68-.48 3.36-.72 5.16-.72 3.24 0 6.3.78 8.4 2.04.36.24.6.54.6.96-.06.48-.36.84-.72.84zM17 11.1c-1.98-1.14-5.28-1.32-7.2-.72-.24.06-.48.12-.66.12-.66 0-1.02-.48-1.02-1.02 0-.6.36-.9.78-1.02 2.28-.66 6-.48 8.34.84.42.24.66.6.66 1.02 0 .48-.36 1.02-.9 1.02-.24 0-.42-.06-.54-.12z"/>
           </svg>
-          <span id="spotify-progress-label">En écoute</span>
+          <span>En écoute</span>
         </div>
         <div id="spotify-progress-track"></div>
         <div class="spotify-progress-bar">
@@ -132,49 +135,64 @@
         </div>
       </div>
 
-      <div class="lyrics-title-row">
-        <h2 id="lyrics-title"></h2>
-        <button id="save-button" class="hidden" type="button">
-          <svg class="save-icon-empty" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" />
-          </svg>
-          <svg class="save-icon-filled" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+      <div class="song-head">
+        <div class="cover cover-lg" id="lyrics-cover"><span></span></div>
+        <div class="song-meta">
+          <h2 id="lyrics-title"></h2>
+          <p id="lyrics-artist"></p>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <button class="tool" id="copy-button">Copier les paroles</button>
+        <button class="tool" id="share-button">Partager</button>
+        <button class="tool" id="save-button">
+          <svg class="save-icon-empty" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px">
             <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" />
           </svg>
           <span class="save-label">Enregistrer</span>
         </button>
+
+        <div class="translate-control">
+          <select id="translate-select">
+            <option value="">Traduire vers…</option>
+            <option value="fr">Français</option>
+            <option value="en">Anglais</option>
+            <option value="es">Espagnol</option>
+            <option value="de">Allemand</option>
+            <option value="it">Italien</option>
+            <option value="pt">Portugais</option>
+            <option value="nl">Néerlandais</option>
+            <option value="ar">Arabe</option>
+            <option value="tr">Turc</option>
+            <option value="ru">Russe</option>
+            <option value="ja">Japonais</option>
+            <option value="ko">Coréen</option>
+            <option value="zh-CN">Chinois</option>
+          </select>
+          <button id="translate-reset" class="tool hidden" type="button">Original</button>
+        </div>
+
+        <div class="sizer">
+          <button id="size-down" aria-label="Réduire le texte">A−</button>
+          <span id="size-label">19px</span>
+          <button id="size-up" aria-label="Agrandir le texte">A+</button>
+        </div>
       </div>
 
-      <div id="translate-bar" class="hidden">
-        <label for="translate-select">Traduire vers</label>
-        <select id="translate-select">
-          <option value="">Choisir une langue</option>
-          <option value="fr">Français</option>
-          <option value="en">Anglais</option>
-          <option value="es">Espagnol</option>
-          <option value="de">Allemand</option>
-          <option value="it">Italien</option>
-          <option value="pt">Portugais</option>
-          <option value="nl">Néerlandais</option>
-          <option value="ar">Arabe</option>
-          <option value="tr">Turc</option>
-          <option value="ru">Russe</option>
-          <option value="ja">Japonais</option>
-          <option value="ko">Coréen</option>
-          <option value="zh-CN">Chinois</option>
-        </select>
-        <button id="translate-reset" class="hidden" type="button">Voir l'original</button>
+      <div id="lyrics-content"></div>
+
+      <div id="genius-embed-wrapper" class="hidden">
+        <p class="genius-embed-note">Paroles via le widget officiel Genius :</p>
+        <div id="genius-embed"></div>
       </div>
 
-      <pre id="lyrics-content"></pre>
       <p id="lyrics-link" class="hidden">
         <a href="#" target="_blank" rel="noopener noreferrer">Lire les paroles sur Genius &rarr;</a>
       </p>
-    </div>
+    </section>
 
-    <footer>
-      <p>Recherche via l'API Genius · Paroles via LRCLIB &amp; lyrics.ovh</p>
-    </footer>
+    <footer class="site-footer">Recherche via l'API Genius · Paroles via LRCLIB, lyrics.ovh &amp; plus</footer>
   </main>
 
   <script src="script.js"></script>

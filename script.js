@@ -2,163 +2,317 @@ const form = document.getElementById('search-form');
 const input = document.getElementById('search-input');
 const statusEl = document.getElementById('status');
 const resultsEl = document.getElementById('results');
+const skeletons = document.getElementById('skeletons');
+const emptyEl = document.getElementById('empty');
+const recentsEl = document.getElementById('recents');
+const recentChips = document.getElementById('recent-chips');
 const lyricsView = document.getElementById('lyrics-view');
 const lyricsTitle = document.getElementById('lyrics-title');
+const lyricsArtist = document.getElementById('lyrics-artist');
 const lyricsContent = document.getElementById('lyrics-content');
-const lyricsLink = document.getElementById('lyrics-link');
+const lyricsCover = document.getElementById('lyrics-cover');
 const backButton = document.getElementById('back-button');
+const copyButton = document.getElementById('copy-button');
+const shareButton = document.getElementById('share-button');
+const halo = document.getElementById('halo');
+const sizeLabel = document.getElementById('size-label');
+const lyricsLink = document.getElementById('lyrics-link');
+
+const spotifyNowPlayingBtn = document.getElementById('spotify-now-playing');
 const spotifyBanner = document.getElementById('spotify-banner');
 const spotifyConnectBtn = document.getElementById('spotify-connect');
 const spotifyDismissBtn = document.getElementById('spotify-dismiss');
-const spotifyNowPlayingBtn = document.getElementById('spotify-now-playing');
 const spotifyProgress = document.getElementById('spotify-progress');
 const spotifyProgressTrack = document.getElementById('spotify-progress-track');
 const spotifyProgressFill = document.getElementById('spotify-progress-fill');
 const spotifyProgressElapsed = document.getElementById('spotify-progress-elapsed');
 const spotifyProgressDuration = document.getElementById('spotify-progress-duration');
-const translateBar = document.getElementById('translate-bar');
+
+const translateControl = document.querySelector('.translate-control');
 const translateSelect = document.getElementById('translate-select');
 const translateResetBtn = document.getElementById('translate-reset');
+
 const menuToggle = document.getElementById('menu-toggle');
 const libraryPanel = document.getElementById('library-panel');
 const libraryList = document.getElementById('library-list');
 const libraryEmpty = document.getElementById('library-empty');
 const libraryCount = document.getElementById('library-count');
 const saveButton = document.getElementById('save-button');
+
 const settingsToggle = document.getElementById('settings-toggle');
 const settingsPanel = document.getElementById('settings-panel');
 const settingsSourcesList = document.getElementById('settings-sources-list');
 
-function setStatus(message) {
+const geniusEmbedWrapper = document.getElementById('genius-embed-wrapper');
+const geniusEmbedContainer = document.getElementById('genius-embed');
+
+const HALO_DEFAULT = '#ffb545';
+const SOURCE_LABELS = {
+  lyricsovh: 'lyrics.ovh',
+  lrclib: 'LRCLIB',
+  textyl: 'Textyl',
+  lyrist: 'Lyrist',
+  chartlyrics: 'ChartLyrics',
+  genius: 'Genius',
+};
+
+let currentLyrics = '';
+let originalLyricsText = '';
+let lastResults = [];
+let currentSong = null;
+
+/* ---------- petites aides ---------- */
+
+function setStatus(message, isError) {
   statusEl.textContent = message || '';
+  statusEl.classList.toggle('error', !!isError);
 }
 
+function initials(name) {
+  return (name || '?').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+}
+
+// Teinte stable déduite du titre : sert au halo quand la pochette n'est pas lisible (CORS).
+function hueOf(text) {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) % 360;
+  return `hsl(${h} 70% 62%)`;
+}
+
+function setHalo(color) {
+  document.documentElement.style.setProperty('--halo', color);
+  halo.style.animation = 'none';
+  void halo.offsetWidth;
+  halo.style.animation = 'haloIn 1.2s cubic-bezier(.2,.8,.2,1) both';
+}
+
+function coverMarkup(song, big) {
+  const tint = hueOf(song.title + song.artist);
+  const style = `background:linear-gradient(140deg,${tint},#0a0a0c)`;
+  const inner = song.thumbnail
+    ? `<img src="${song.thumbnail}" alt="" loading="lazy" />`
+    : `<span>${initials(song.artist)}</span>`;
+  return `<div class="cover${big ? ' cover-lg' : ''}" style="${style}">${inner}</div>`;
+}
+
+// Met à jour la pochette en place (garde le même élément DOM d'un chargement
+// à l'autre, contrairement à outerHTML qui casserait la référence).
+function setCover(container, song) {
+  const tint = hueOf(song.title + song.artist);
+  container.style.background = `linear-gradient(140deg,${tint},#0a0a0c)`;
+  container.innerHTML = song.thumbnail
+    ? `<img src="${song.thumbnail}" alt="" loading="lazy" />`
+    : `<span>${initials(song.artist)}</span>`;
+}
+
+/* ---------- recherches récentes ---------- */
+
+function getRecents() {
+  try { const r = JSON.parse(localStorage.getItem('pst-recents') || '[]'); return Array.isArray(r) ? r : []; }
+  catch (e) { return []; }
+}
+
+function pushRecent(query) {
+  const list = [query, ...getRecents().filter((r) => r.toLowerCase() !== query.toLowerCase())].slice(0, 4);
+  try { localStorage.setItem('pst-recents', JSON.stringify(list)); } catch (e) {}
+  renderRecents();
+}
+
+function renderRecents() {
+  const list = getRecents();
+  recentsEl.hidden = list.length === 0;
+  recentChips.innerHTML = '';
+  list.forEach((q) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.textContent = q;
+    b.addEventListener('click', () => { input.value = q; runSearch(q); });
+    recentChips.appendChild(b);
+  });
+}
+
+/* ---------- taille du texte ---------- */
+
+function getSize() {
+  const s = parseInt(localStorage.getItem('pst-size') || '', 10);
+  return s >= 15 && s <= 30 ? s : 19;
+}
+
+function setSize(n) {
+  const size = Math.min(30, Math.max(15, n));
+  try { localStorage.setItem('pst-size', String(size)); } catch (e) {}
+  document.documentElement.style.setProperty('--lyr-size', size + 'px');
+  sizeLabel.textContent = size + 'px';
+}
+
+document.getElementById('size-down').addEventListener('click', () => setSize(getSize() - 1));
+document.getElementById('size-up').addEventListener('click', () => setSize(getSize() + 1));
+
+/* ---------- vues ---------- */
+
 function showResults() {
-  lyricsView.classList.add('hidden');
-  resultsEl.classList.remove('hidden');
-  form.classList.remove('hidden');
+  lyricsView.hidden = true;
+  resultsEl.hidden = false;
+  form.hidden = false;
+  recentsEl.hidden = getRecents().length === 0;
+  emptyEl.hidden = lastResults.length > 0;
+  setHalo(HALO_DEFAULT);
+  if (lastResults.length) setStatus(lastResults.length + ' résultats');
+  closeLibraryPanel();
+  closeSettingsPanel();
   stopSpotifyProgressTracking();
 }
 
 function showLyricsView() {
-  lyricsView.classList.remove('hidden');
-  resultsEl.classList.add('hidden');
+  lyricsView.hidden = false;
+  resultsEl.hidden = true;
+  emptyEl.hidden = true;
+  recentsEl.hidden = true;
+  setStatus('');
   updateSpotifyBanner();
   startSpotifyProgressTracking();
 }
 
-function scrollToLyrics() {
-  lyricsContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
+/* ---------- recherche ---------- */
 
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const query = input.value.trim();
+async function runSearch(query) {
+  query = (query || '').trim();
   if (!query) return;
 
+  pushRecent(query);
   resultsEl.innerHTML = '';
-  setStatus('Recherche en cours...');
+  lastResults = [];
+  emptyEl.hidden = true;
+  lyricsView.hidden = true;
+  resultsEl.hidden = false;
+  skeletons.hidden = false;
+  setStatus('');
 
   try {
     const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&sources=${getEnabledSources().join(',')}`);
     const data = await res.json();
+    skeletons.hidden = true;
 
-    if (!res.ok) {
-      setStatus(data.error || 'Erreur inconnue.');
-      return;
-    }
+    if (!res.ok) { setStatus(data.error || 'Erreur inconnue.', true); return; }
+    if (!data.results || data.results.length === 0) { setStatus('Aucun résultat trouvé.', true); return; }
 
-    if (data.results.length === 0) {
-      setStatus('Aucun résultat trouvé.');
-      return;
-    }
-
-    setStatus(`${data.results.length} résultat(s)`);
+    lastResults = data.results;
+    setStatus(data.results.length + ' résultats');
     renderResults(data.results);
-    input.blur();
   } catch (err) {
-    setStatus('Erreur réseau, réessaie.');
+    skeletons.hidden = true;
+    setStatus('Erreur réseau, réessaie.', true);
   }
-});
+}
+
+form.addEventListener('submit', (e) => { e.preventDefault(); runSearch(input.value); });
 
 function renderResults(results) {
   resultsEl.innerHTML = '';
-  for (const song of results) {
+  results.forEach((song, i) => {
     const li = document.createElement('li');
-    const sourceLabels = {
-      lyricsovh: 'lyrics.ovh',
-      lrclib: 'LRCLIB',
-      textyl: 'Textyl',
-      lyrist: 'Lyrist',
-      chartlyrics: 'ChartLyrics',
-      genius: 'Genius',
-    };
-    const sourceLabel = sourceLabels[song.source] || song.source;
+    li.style.animationDelay = (i * 70) + 'ms';
     li.innerHTML = `
-      ${song.thumbnail ? `<img src="${song.thumbnail}" alt="" />` : '<div class="result-thumb-fallback"></div>'}
-      <div class="result-info">
+      ${coverMarkup(song, false)}
+      <div class="info">
         <strong>${song.title}</strong>
-        <span>${song.artist} · ${sourceLabel}</span>
+        <span>${song.artist}</span>
       </div>
+      <span class="source">${SOURCE_LABELS[song.source] || song.source}</span>
+      <span class="arrow">→</span>
     `;
     li.addEventListener('click', () => loadLyrics(song));
     resultsEl.appendChild(li);
-  }
+  });
 }
 
-function showGeniusLink(url) {
-  if (!url) {
-    lyricsLink.classList.add('hidden');
-    return;
-  }
-  lyricsLink.querySelector('a').href = url;
-  lyricsLink.classList.remove('hidden');
-}
+/* ---------- paroles ---------- */
 
-let originalLyricsText = '';
-let currentSong = null;
-
-function resetTranslateBar() {
-  translateSelect.value = '';
-  translateResetBtn.classList.add('hidden');
+function renderLyrics(text) {
+  currentLyrics = text || '';
+  lyricsContent.innerHTML = '';
+  const lines = currentLyrics.split('\n');
+  lines.forEach((line, i) => {
+    const p = document.createElement('p');
+    const trimmed = line.trim();
+    if (!trimmed) { p.className = 'blank'; p.innerHTML = '&nbsp;'; }
+    else if (trimmed.startsWith('[')) { p.className = 'tag'; p.textContent = trimmed; }
+    else p.textContent = trimmed;
+    // cascade limitée aux ~40 premières lignes pour rester nerveux sur les textes longs
+    p.style.animationDelay = Math.min(i, 40) * 45 + 'ms';
+    lyricsContent.appendChild(p);
+  });
 }
 
 function showTranslatableLyrics(text) {
   originalLyricsText = text;
-  lyricsContent.textContent = text;
+  renderLyrics(text);
   resetTranslateBar();
-  translateBar.classList.remove('hidden');
+  translateControl.classList.remove('hidden');
   saveButton.classList.remove('hidden');
   updateSaveButtonState();
 }
 
-function hideTranslateBar() {
-  translateBar.classList.add('hidden');
+function hideLyricsExtras() {
+  translateControl.classList.add('hidden');
   saveButton.classList.add('hidden');
   resetTranslateBar();
+  hideGeniusEmbed();
+  showGeniusLink(null);
+}
+
+function hideGeniusEmbed() {
+  geniusEmbedWrapper.classList.add('hidden');
+  geniusEmbedContainer.innerHTML = '';
+}
+
+// Le widget officiel Genius (embed_content) : chargé dans le navigateur du
+// visiteur, donc pas bloqué comme le scraping direct.
+function renderGeniusEmbed(html) {
+  geniusEmbedContainer.innerHTML = html;
+
+  geniusEmbedContainer.querySelectorAll('script').forEach((oldScript) => {
+    const newScript = document.createElement('script');
+    for (const attr of oldScript.attributes) newScript.setAttribute(attr.name, attr.value);
+    newScript.textContent = oldScript.textContent;
+    oldScript.replaceWith(newScript);
+  });
+
+  geniusEmbedWrapper.classList.remove('hidden');
+}
+
+function showGeniusLink(url) {
+  if (!url) { lyricsLink.classList.add('hidden'); return; }
+  lyricsLink.querySelector('a').href = url;
+  lyricsLink.classList.remove('hidden');
 }
 
 async function loadLyrics(song) {
-  setStatus('');
-  currentSong = { artist: song.artist, title: song.title, thumbnail: song.thumbnail || null };
-  lyricsTitle.textContent = `${song.title} — ${song.artist}`;
-  showGeniusLink(null);
-  hideTranslateBar();
+  currentSong = { artist: song.artist, title: song.title, thumbnail: song.thumbnail || null, id: song.id || null };
+
+  lyricsTitle.textContent = song.title;
+  lyricsArtist.innerHTML = `${song.artist} · <em>${SOURCE_LABELS[song.source] || song.source}</em>`;
+  setCover(lyricsCover, song);
+  setHalo(hueOf(song.title + song.artist));
+  hideLyricsExtras();
   showLyricsView();
-  closeLibraryPanel();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  copyButton.classList.remove('ok');
+  copyButton.textContent = 'Copier les paroles';
 
   // Le repli lyrics.ovh renvoie déjà les paroles directement lors de la recherche.
   if (song.source === 'lyricsovh' && song.lyrics) {
     showTranslatableLyrics(song.lyrics);
-    scrollToLyrics();
     return;
   }
 
-  lyricsContent.textContent = 'Chargement des paroles...';
-  scrollToLyrics();
+  renderLyrics('Chargement des paroles…');
 
   const params = new URLSearchParams();
   if (song.url) params.set('url', song.url);
+  if (song.id) params.set('id', song.id);
   params.set('artist', song.artist);
   params.set('title', song.title);
   params.set('sources', getEnabledSources().join(','));
@@ -168,39 +322,104 @@ async function loadLyrics(song) {
     const data = await res.json();
 
     if (!res.ok) {
-      lyricsContent.textContent = data.error || 'Erreur lors du chargement des paroles.';
-      scrollToLyrics();
+      renderLyrics(data.error || 'Erreur lors du chargement des paroles.');
       return;
     }
 
     if (data.lyrics) {
       showTranslatableLyrics(data.lyrics);
-      scrollToLyrics();
       return;
     }
 
-    lyricsContent.textContent =
-      "Les paroles de cette chanson ne sont pas disponibles via lyrics.ovh.";
+    if (data.embedHtml) {
+      renderLyrics('');
+      renderGeniusEmbed(data.embedHtml);
+      showGeniusLink(data.geniusUrl);
+      return;
+    }
+
+    renderLyrics("Les paroles de cette chanson ne sont pas disponibles pour le moment.");
     showGeniusLink(data.geniusUrl);
-    scrollToLyrics();
   } catch (err) {
-    lyricsContent.textContent = 'Erreur réseau, réessaie.';
-    scrollToLyrics();
+    renderLyrics('Erreur réseau, réessaie.');
   }
 }
 
 backButton.addEventListener('click', showResults);
 
-// ---- Menu déroulant / Bibliothèque de paroles enregistrées ----
+/* ---------- copier / partager ---------- */
+
+function flash(button, label) {
+  const original = button.dataset.label || button.textContent;
+  button.dataset.label = original;
+  button.textContent = label;
+  button.classList.add('ok');
+  setTimeout(() => { button.textContent = original; button.classList.remove('ok'); }, 1800);
+}
+
+copyButton.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(currentLyrics); flash(copyButton, '✓ Copié'); }
+  catch (e) { flash(copyButton, 'Copie impossible'); }
+});
+
+shareButton.addEventListener('click', async () => {
+  const shareData = { title: lyricsTitle.textContent, text: `${lyricsTitle.textContent} — paroles`, url: location.href };
+  if (navigator.share) { try { await navigator.share(shareData); return; } catch (e) {} }
+  try { await navigator.clipboard.writeText(location.href); flash(shareButton, '✓ Lien copié'); }
+  catch (e) { flash(shareButton, 'Partage indisponible'); }
+});
+
+/* ---------- traduction ---------- */
+
+function resetTranslateBar() {
+  translateSelect.value = '';
+  translateResetBtn.classList.add('hidden');
+}
+
+translateSelect.addEventListener('change', async () => {
+  const target = translateSelect.value;
+  if (!target) {
+    renderLyrics(originalLyricsText);
+    translateResetBtn.classList.add('hidden');
+    return;
+  }
+
+  const previousText = currentLyrics;
+  renderLyrics('Traduction en cours…');
+
+  try {
+    const params = new URLSearchParams({ text: originalLyricsText, target });
+    const res = await fetch(`/api/translate?${params.toString()}`);
+    const data = await res.json();
+
+    if (!res.ok || !data.translated) {
+      renderLyrics(previousText);
+      setStatus(data.error || 'Traduction indisponible pour le moment.', true);
+      translateSelect.value = '';
+      return;
+    }
+
+    renderLyrics(data.translated);
+    translateResetBtn.classList.remove('hidden');
+  } catch (err) {
+    renderLyrics(previousText);
+    setStatus('Erreur réseau, réessaie.', true);
+    translateSelect.value = '';
+  }
+});
+
+translateResetBtn.addEventListener('click', () => {
+  renderLyrics(originalLyricsText);
+  resetTranslateBar();
+});
+
+/* ---------- menu déroulant / bibliothèque ---------- */
 
 const LIBRARY_KEY = 'pstparoles_library';
 
 function getLibrary() {
-  try {
-    return JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]');
-  } catch (err) {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]'); }
+  catch (err) { return []; }
 }
 
 function saveLibraryData(list) {
@@ -251,13 +470,16 @@ function updateSaveButtonState() {
 saveButton.addEventListener('click', () => {
   if (!currentSong) return;
   const saved = isInLibrary(currentSong.artist, currentSong.title);
-  if (saved) {
-    removeFromLibrary(currentSong.artist, currentSong.title);
-  } else {
-    addToLibrary(currentSong, originalLyricsText);
-  }
+  if (saved) removeFromLibrary(currentSong.artist, currentSong.title);
+  else addToLibrary(currentSong, originalLyricsText);
   updateSaveButtonState();
 });
+
+function libraryThumbMarkup(item) {
+  if (item.thumbnail) return `<img class="library-item-thumb" src="${item.thumbnail}" alt="" loading="lazy" />`;
+  const tint = hueOf(item.title + item.artist);
+  return `<div class="library-item-thumb" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,${tint},#0a0a0c);font-family:var(--serif);font-size:14px;color:rgba(0,0,0,.6)">${initials(item.artist)}</div>`;
+}
 
 function renderLibrary() {
   const library = getLibrary();
@@ -268,7 +490,7 @@ function renderLibrary() {
   for (const item of library) {
     const li = document.createElement('li');
     li.innerHTML = `
-      ${item.thumbnail ? `<img src="${item.thumbnail}" alt="" width="36" height="36" style="border-radius:8px;object-fit:cover;flex-shrink:0;" />` : '<div class="result-thumb-fallback" style="width:36px;height:36px;"></div>'}
+      ${libraryThumbMarkup(item)}
       <div class="library-item-info">
         <strong>${item.title}</strong>
         <span>${item.artist}</span>
@@ -288,14 +510,21 @@ function renderLibrary() {
 }
 
 function loadFromLibrary(item) {
-  setStatus('');
   currentSong = { artist: item.artist, title: item.title, thumbnail: item.thumbnail };
-  lyricsTitle.textContent = `${item.title} — ${item.artist}`;
-  showGeniusLink(null);
+
+  lyricsTitle.textContent = item.title;
+  lyricsArtist.innerHTML = `${item.artist} · <em>Bibliothèque</em>`;
+  setCover(lyricsCover, item);
+  setHalo(hueOf(item.title + item.artist));
+  hideLyricsExtras();
   showLyricsView();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  copyButton.classList.remove('ok');
+  copyButton.textContent = 'Copier les paroles';
+
   showTranslatableLyrics(item.lyrics);
   closeLibraryPanel();
-  scrollToLyrics();
 }
 
 function openLibraryPanel() {
@@ -311,12 +540,8 @@ function closeLibraryPanel() {
 menuToggle.addEventListener('click', (e) => {
   e.stopPropagation();
   closeSettingsPanel();
-  if (libraryPanel.classList.contains('open')) {
-    closeLibraryPanel();
-  } else {
-    renderLibrary();
-    openLibraryPanel();
-  }
+  if (libraryPanel.classList.contains('open')) closeLibraryPanel();
+  else { renderLibrary(); openLibraryPanel(); }
 });
 
 document.addEventListener('click', (e) => {
@@ -326,15 +551,10 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    closeLibraryPanel();
-    closeSettingsPanel();
-  }
+  if (e.key === 'Escape') { closeLibraryPanel(); closeSettingsPanel(); }
 });
 
-renderLibrary();
-
-// ---- Paramètres : choix des sources de paroles ----
+/* ---------- paramètres : choix des sources de paroles ---------- */
 
 const SETTINGS_SOURCES_KEY = 'pstparoles_sources';
 const AVAILABLE_SOURCES = [
@@ -383,11 +603,8 @@ settingsSourcesList.addEventListener('change', (e) => {
   if (!checkbox) return;
 
   const enabled = new Set(getEnabledSources());
-  if (checkbox.checked) {
-    enabled.add(checkbox.dataset.source);
-  } else {
-    enabled.delete(checkbox.dataset.source);
-  }
+  if (checkbox.checked) enabled.add(checkbox.dataset.source);
+  else enabled.delete(checkbox.dataset.source);
 
   // Toujours garder au moins une source active.
   if (enabled.size === 0) {
@@ -411,12 +628,8 @@ function closeSettingsPanel() {
 settingsToggle.addEventListener('click', (e) => {
   e.stopPropagation();
   closeLibraryPanel();
-  if (settingsPanel.classList.contains('open')) {
-    closeSettingsPanel();
-  } else {
-    renderSettings();
-    openSettingsPanel();
-  }
+  if (settingsPanel.classList.contains('open')) closeSettingsPanel();
+  else { renderSettings(); openSettingsPanel(); }
 });
 
 document.addEventListener('click', (e) => {
@@ -425,46 +638,7 @@ document.addEventListener('click', (e) => {
   closeSettingsPanel();
 });
 
-// ---- Traduction des paroles ----
-
-translateSelect.addEventListener('change', async () => {
-  const target = translateSelect.value;
-  if (!target) {
-    lyricsContent.textContent = originalLyricsText;
-    translateResetBtn.classList.add('hidden');
-    return;
-  }
-
-  const previousText = lyricsContent.textContent;
-  lyricsContent.textContent = 'Traduction en cours...';
-
-  try {
-    const params = new URLSearchParams({ text: originalLyricsText, target });
-    const res = await fetch(`/api/translate?${params.toString()}`);
-    const data = await res.json();
-
-    if (!res.ok || !data.translated) {
-      lyricsContent.textContent = previousText;
-      setStatus(data.error || 'Traduction indisponible pour le moment.');
-      translateSelect.value = '';
-      return;
-    }
-
-    lyricsContent.textContent = data.translated;
-    translateResetBtn.classList.remove('hidden');
-  } catch (err) {
-    lyricsContent.textContent = previousText;
-    setStatus('Erreur réseau, réessaie.');
-    translateSelect.value = '';
-  }
-});
-
-translateResetBtn.addEventListener('click', () => {
-  lyricsContent.textContent = originalLyricsText;
-  resetTranslateBar();
-});
-
-// ---- Connexion Spotify (PKCE, sans backend secret) ----
+/* ---------- connexion Spotify (PKCE, sans backend secret) ---------- */
 
 const SPOTIFY_AUTH_URL = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
@@ -477,9 +651,7 @@ let spotifyClientIdPromise = null;
 
 function getSpotifyClientId() {
   if (!spotifyClientIdPromise) {
-    spotifyClientIdPromise = fetch('/api/spotify-config')
-      .then((res) => res.json())
-      .then((data) => data.clientId);
+    spotifyClientIdPromise = fetch('/api/spotify-config').then((res) => res.json()).then((data) => data.clientId);
   }
   return spotifyClientIdPromise;
 }
@@ -497,10 +669,7 @@ function randomString(length) {
 }
 
 function base64UrlEncode(buffer) {
-  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  return btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 async function codeChallengeFromVerifier(verifier) {
@@ -552,7 +721,6 @@ async function handleSpotifyRedirect() {
   const state = params.get('state');
   if (!code) return;
 
-  // Nettoie l'URL tout de suite pour éviter de retenter l'échange au refresh.
   window.history.replaceState({}, document.title, window.location.pathname);
 
   const expectedState = sessionStorage.getItem('spotify_state');
@@ -576,7 +744,6 @@ async function handleSpotifyRedirect() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error_description || 'Échange du code échoué.');
-
     storeSpotifyTokens(data);
   } catch (err) {
     console.error('Erreur connexion Spotify:', err);
@@ -589,9 +756,7 @@ async function handleSpotifyRedirect() {
 function storeSpotifyTokens(data) {
   localStorage.setItem(LS_ACCESS_TOKEN, data.access_token);
   localStorage.setItem(LS_EXPIRES_AT, String(Date.now() + data.expires_in * 1000));
-  if (data.refresh_token) {
-    localStorage.setItem(LS_REFRESH_TOKEN, data.refresh_token);
-  }
+  if (data.refresh_token) localStorage.setItem(LS_REFRESH_TOKEN, data.refresh_token);
 }
 
 async function refreshSpotifyToken() {
@@ -602,17 +767,10 @@ async function refreshSpotifyToken() {
   const res = await fetch(SPOTIFY_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-    }),
+    body: new URLSearchParams({ client_id: clientId, grant_type: 'refresh_token', refresh_token: refreshToken }),
   });
 
-  if (!res.ok) {
-    disconnectSpotify();
-    return null;
-  }
+  if (!res.ok) { disconnectSpotify(); return null; }
 
   const data = await res.json();
   storeSpotifyTokens(data);
@@ -621,11 +779,8 @@ async function refreshSpotifyToken() {
 
 async function getValidSpotifyToken() {
   if (!isSpotifyConnected()) return null;
-
   const expiresAt = Number(localStorage.getItem(LS_EXPIRES_AT) || 0);
-  if (Date.now() < expiresAt - 5000) {
-    return localStorage.getItem(LS_ACCESS_TOKEN);
-  }
+  if (Date.now() < expiresAt - 5000) return localStorage.getItem(LS_ACCESS_TOKEN);
   return refreshSpotifyToken();
 }
 
@@ -637,7 +792,7 @@ async function fetchPlaybackState() {
     headers: { Authorization: `Bearer ${token}` },
   });
 
-  if (res.status === 204) return null; // rien en cours de lecture
+  if (res.status === 204) return null;
   if (!res.ok) return null;
 
   const data = await res.json();
@@ -663,7 +818,30 @@ function updateSpotifyUI() {
   if (!isSpotifyConnected()) stopSpotifyProgressTracking();
 }
 
-// ---- Barre de progression "en écoute" au-dessus des paroles ----
+spotifyConnectBtn.addEventListener('click', connectSpotify);
+
+spotifyDismissBtn.addEventListener('click', () => {
+  sessionStorage.setItem('spotify_banner_dismissed', '1');
+  updateSpotifyBanner();
+});
+
+spotifyNowPlayingBtn.addEventListener('click', async () => {
+  spotifyNowPlayingBtn.disabled = true;
+  setStatus('Récupération de la chanson en cours...');
+  try {
+    const track = await fetchPlaybackState();
+    if (!track) {
+      setStatus("Aucune lecture en cours sur Spotify (ou session expirée).", true);
+      return;
+    }
+    input.value = `${track.artist} ${track.title}`;
+    runSearch(input.value);
+  } finally {
+    spotifyNowPlayingBtn.disabled = false;
+  }
+});
+
+/* ---------- barre de progression "en écoute" ---------- */
 
 let spotifyPollTimer = null;
 let spotifyTickTimer = null;
@@ -679,9 +857,7 @@ function formatMs(ms) {
 }
 
 function renderSpotifyProgressTimes() {
-  const pct = spotifyLocalDurationMs
-    ? Math.min(100, (spotifyLocalProgressMs / spotifyLocalDurationMs) * 100)
-    : 0;
+  const pct = spotifyLocalDurationMs ? Math.min(100, (spotifyLocalProgressMs / spotifyLocalDurationMs) * 100) : 0;
   spotifyProgressFill.style.width = `${pct}%`;
   spotifyProgressElapsed.textContent = formatMs(spotifyLocalProgressMs);
   spotifyProgressDuration.textContent = formatMs(spotifyLocalDurationMs);
@@ -727,28 +903,12 @@ function stopSpotifyProgressTracking() {
   spotifyProgress.classList.add('hidden');
 }
 
-spotifyConnectBtn.addEventListener('click', connectSpotify);
+/* ---------- init ---------- */
 
-spotifyDismissBtn.addEventListener('click', () => {
-  sessionStorage.setItem('spotify_banner_dismissed', '1');
-  updateSpotifyBanner();
-});
-
-spotifyNowPlayingBtn.addEventListener('click', async () => {
-  spotifyNowPlayingBtn.disabled = true;
-  setStatus('Récupération de la chanson en cours...');
-  try {
-    const track = await fetchPlaybackState();
-    if (!track) {
-      setStatus("Aucune lecture en cours sur Spotify (ou session expirée).");
-      return;
-    }
-    input.value = `${track.artist} ${track.title}`;
-    form.dispatchEvent(new Event('submit', { cancelable: true }));
-  } finally {
-    spotifyNowPlayingBtn.disabled = false;
-  }
-});
+setSize(getSize());
+renderRecents();
+renderLibrary();
+input.focus();
 
 (async () => {
   await handleSpotifyRedirect();

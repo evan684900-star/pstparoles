@@ -11,6 +11,9 @@ const lyricsTitle = document.getElementById('lyrics-title');
 const lyricsArtist = document.getElementById('lyrics-artist');
 const lyricsContent = document.getElementById('lyrics-content');
 const lyricsCover = document.getElementById('lyrics-cover');
+const coverLightbox = document.getElementById('cover-lightbox');
+const lightboxCover = document.getElementById('lightbox-cover');
+const lightboxClose = document.getElementById('lightbox-close');
 const vinylSlot = document.getElementById('vinyl-slot');
 const backButton = document.getElementById('back-button');
 const copyButton = document.getElementById('copy-button');
@@ -113,6 +116,27 @@ function setCover(container, song) {
     ? `<img src="${song.thumbnail}" alt="" loading="lazy" />`
     : `<span>${initials(song.artist)}</span>`;
 }
+
+// Pochette en grand : réutilise setCover() pour un rendu identique
+// (image ou initiales) en plus grand.
+function openCoverLightbox() {
+  if (!currentSong) return;
+  setCover(lightboxCover, currentSong);
+  coverLightbox.classList.remove('hidden');
+}
+
+function closeCoverLightbox() {
+  coverLightbox.classList.add('hidden');
+}
+
+lyricsCover.addEventListener('click', openCoverLightbox);
+lyricsCover.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCoverLightbox(); }
+});
+lightboxClose.addEventListener('click', closeCoverLightbox);
+coverLightbox.addEventListener('click', (e) => {
+  if (e.target === coverLightbox) closeCoverLightbox();
+});
 
 // Relance la sortie du vinyle à chaque nouvelle chanson.
 function replayVinyl() {
@@ -693,7 +717,7 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { closeLibraryPanel(); closeSettingsPanel(); }
+  if (e.key === 'Escape') { closeLibraryPanel(); closeSettingsPanel(); closeCoverLightbox(); }
 });
 
 /* ---------- easter egg : taper "karaoke" au clavier ---------- */

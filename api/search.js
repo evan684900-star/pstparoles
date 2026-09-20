@@ -41,7 +41,8 @@ module.exports = async (req, res) => {
   }
 
   // Genius n'a rien trouvé (ou n'est pas disponible) : on tente les autres sources en repli.
-  const fallback = await guessLyrics(query);
+  const enabledKeys = req.query.sources ? req.query.sources.split(',').filter(Boolean) : null;
+  const fallback = await guessLyrics(query, enabledKeys);
   if (fallback) {
     return res.status(200).json({
       results: [

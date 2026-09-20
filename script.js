@@ -25,6 +25,9 @@ const libraryList = document.getElementById('library-list');
 const libraryEmpty = document.getElementById('library-empty');
 const libraryCount = document.getElementById('library-count');
 const saveButton = document.getElementById('save-button');
+const settingsToggle = document.getElementById('settings-toggle');
+const settingsPanel = document.getElementById('settings-panel');
+const settingsSourcesList = document.getElementById('settings-sources-list');
 
 function setStatus(message) {
   statusEl.textContent = message || '';
@@ -57,7 +60,7 @@ form.addEventListener('submit', async (e) => {
   setStatus('Recherche en cours...');
 
   try {
-    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&sources=${getEnabledSources().join(',')}`);
     const data = await res.json();
 
     if (!res.ok) {
@@ -158,6 +161,7 @@ async function loadLyrics(song) {
   if (song.url) params.set('url', song.url);
   params.set('artist', song.artist);
   params.set('title', song.title);
+  params.set('sources', getEnabledSources().join(','));
 
   try {
     const res = await fetch(`/api/lyrics?${params.toString()}`);
@@ -306,6 +310,7 @@ function closeLibraryPanel() {
 
 menuToggle.addEventListener('click', (e) => {
   e.stopPropagation();
+  closeSettingsPanel();
   if (libraryPanel.classList.contains('open')) {
     closeLibraryPanel();
   } else {
@@ -321,10 +326,103 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeLibraryPanel();
+  if (e.key === 'Escape') {
+    closeLibraryPanel();
+    closeSettingsPanel();
+  }
 });
 
 renderLibrary();
+
+// ---- Paramètres : choix des sources de paroles ----
+
+const SETTINGS_SOURCES_KEY = 'pstparoles_sources';
+const AVAILABLE_SOURCES = [
+  { key: 'lrclib', label: 'LRCLIB' },
+  { key: 'lyricsovh', label: 'lyrics.ovh' },
+  { key: 'textyl', label: 'Textyl' },
+  { key: 'lyrist', label: 'Lyrist' },
+  { key: 'chartlyrics', label: 'ChartLyrics' },
+];
+const ALL_SOURCE_KEYS = AVAILABLE_SOURCES.map((s) => s.key);
+
+function getEnabledSources() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(SETTINGS_SOURCES_KEY) || 'null');
+    if (Array.isArray(stored) && stored.length) return stored;
+  } catch (err) {
+    // valeur corrompue, on repart sur toutes les sources
+  }
+  return ALL_SOURCE_KEYS;
+}
+
+function setEnabledSources(keys) {
+  localStorage.setItem(SETTINGS_SOURCES_KEY, JSON.stringify(keys));
+}
+
+function renderSettings() {
+  const enabled = new Set(getEnabledSources());
+  settingsSourcesList.innerHTML = '';
+
+  for (const source of AVAILABLE_SOURCES) {
+    const li = document.createElement('li');
+    const id = `source-${source.key}`;
+    li.innerHTML = `
+      <label for="${id}">
+        <input type="checkbox" id="${id}" data-source="${source.key}" ${enabled.has(source.key) ? 'checked' : ''} />
+        ${source.label}
+      </label>
+    `;
+    settingsSourcesList.appendChild(li);
+  }
+}
+
+settingsSourcesList.addEventListener('change', (e) => {
+  const checkbox = e.target.closest('input[type="checkbox"]');
+  if (!checkbox) return;
+
+  const enabled = new Set(getEnabledSources());
+  if (checkbox.checked) {
+    enabled.add(checkbox.dataset.source);
+  } else {
+    enabled.delete(checkbox.dataset.source);
+  }
+
+  // Toujours garder au moins une source active.
+  if (enabled.size === 0) {
+    checkbox.checked = true;
+    enabled.add(checkbox.dataset.source);
+  }
+
+  setEnabledSources(ALL_SOURCE_KEYS.filter((key) => enabled.has(key)));
+});
+
+function openSettingsPanel() {
+  settingsPanel.classList.add('open');
+  settingsToggle.setAttribute('aria-expanded', 'true');
+}
+
+function closeSettingsPanel() {
+  settingsPanel.classList.remove('open');
+  settingsToggle.setAttribute('aria-expanded', 'false');
+}
+
+settingsToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  closeLibraryPanel();
+  if (settingsPanel.classList.contains('open')) {
+    closeSettingsPanel();
+  } else {
+    renderSettings();
+    openSettingsPanel();
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (!settingsPanel.classList.contains('open')) return;
+  if (settingsPanel.contains(e.target) || settingsToggle.contains(e.target)) return;
+  closeSettingsPanel();
+});
 
 // ---- Traduction des paroles ----
 

@@ -47,6 +47,13 @@ const settingsSourcesList = document.getElementById('settings-sources-list');
 const geniusEmbedWrapper = document.getElementById('genius-embed-wrapper');
 const geniusEmbedContainer = document.getElementById('genius-embed');
 
+const syncBar = document.getElementById('sync-bar');
+const syncStatus = document.getElementById('sync-status');
+const syncOffsetLabel = document.getElementById('sync-offset-label');
+const syncOffsetDown = document.getElementById('sync-offset-down');
+const syncOffsetUp = document.getElementById('sync-offset-up');
+const followButton = document.getElementById('follow-button');
+
 const HALO_DEFAULT = '#ffb545';
 const SOURCE_LABELS = {
   lyricsovh: 'lyrics.ovh',
@@ -239,6 +246,9 @@ function renderResults(results) {
 
 function renderLyrics(text) {
   currentLyrics = text || '';
+  // Le rendu simple remplace le rendu synchronisé : on abandonne les
+  // références aux lignes horodatées (elles seraient détachées du DOM).
+  clearSyncedLyrics();
   lyricsContent.innerHTML = '';
   const lines = currentLyrics.split('\n');
   lines.forEach((line, i) => {
@@ -262,9 +272,39 @@ function showTranslatableLyrics(text) {
   updateSaveButtonState();
 }
 
+// Lignes horodatées de la chanson affichée : conservées à part du rendu
+// pour pouvoir revenir au mode synchronisé après une traduction.
+let currentSyncedLines = [];
+
+// Affiche la réponse de /api/lyrics : version synchronisée si la source en
+// fournit une, texte simple sinon.
+function applyLyricsPayload(data) {
+  originalLyricsText = data.lyrics;
+  currentSyncedLines = data.syncedLyrics ? parseLrc(data.syncedLyrics) : [];
+
+  if (currentSyncedLines.length) {
+    renderSyncedLyrics(currentSyncedLines);
+  } else {
+    renderLyrics(data.lyrics);
+  }
+
+  resetTranslateBar();
+  translateControl.classList.remove('hidden');
+  saveButton.classList.remove('hidden');
+  updateSaveButtonState();
+}
+
+// Revient au texte d'origine, en réactivant le surlignage si disponible.
+function restoreOriginalLyrics() {
+  if (currentSyncedLines.length) renderSyncedLyrics(currentSyncedLines);
+  else renderLyrics(originalLyricsText);
+}
+
 function hideLyricsExtras() {
   translateControl.classList.add('hidden');
   saveButton.classList.add('hidden');
+  currentSyncedLines = [];
+  clearSyncedLyrics();
   resetTranslateBar();
   hideGeniusEmbed();
   showGeniusLink(null);
@@ -355,7 +395,7 @@ async function loadLyrics(song) {
     }
 
     if (data.lyrics) {
-      showTranslatableLyrics(data.lyrics);
+      applyLyricsPayload(data);
       return;
     }
 
@@ -407,7 +447,7 @@ function resetTranslateBar() {
 translateSelect.addEventListener('change', async () => {
   const target = translateSelect.value;
   if (!target) {
-    renderLyrics(originalLyricsText);
+    restoreOriginalLyrics();
     translateResetBtn.classList.add('hidden');
     return;
   }
@@ -437,7 +477,7 @@ translateSelect.addEventListener('change', async () => {
 });
 
 translateResetBtn.addEventListener('click', () => {
-  renderLyrics(originalLyricsText);
+  restoreOriginalLyrics();
   resetTranslateBar();
 });
 
@@ -817,9 +857,14 @@ async function fetchPlaybackState() {
   const token = await getValidSpotifyToken();
   if (!token) return null;
 
+  // On mesure l'aller-retour réseau : la position renvoyée correspond au
+  // moment où Spotify a traité la requête, donc quelque part entre l'envoi
+  // et la réception. On compense avec la moitié du temps de trajet.
+  const sentAt = performance.now();
   const res = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
     headers: { Authorization: `Bearer ${token}` },
   });
+  const receivedAt = performance.now();
 
   if (res.status === 204) return null;
   if (!res.ok) return null;
@@ -827,12 +872,15 @@ async function fetchPlaybackState() {
   const data = await res.json();
   if (!data || !data.item) return null;
 
+  const latencyCompensationMs = (receivedAt - sentAt) / 2;
+
   return {
     title: data.item.name,
     artist: data.item.artists.map((a) => a.name).join(', '),
-    progressMs: data.progress_ms || 0,
+    progressMs: (data.progress_ms || 0) + latencyCompensationMs,
     durationMs: data.item.duration_ms || 0,
     isPlaying: Boolean(data.is_playing),
+    anchoredAtPerfMs: receivedAt,
   };
 }
 
@@ -844,6 +892,7 @@ function updateSpotifyBanner() {
 function updateSpotifyUI() {
   spotifyNowPlayingBtn.classList.toggle('hidden', !isSpotifyConnected());
   updateSpotifyBanner();
+  updateFollowButton();
   if (!isSpotifyConnected()) stopSpotifyProgressTracking();
 }
 
@@ -870,13 +919,17 @@ spotifyNowPlayingBtn.addEventListener('click', async () => {
   }
 });
 
-/* ---------- barre de progression "en écoute" ---------- */
+/* ---------- moteur de position de lecture (haute précision) ---------- */
 
+// Le sondage réseau ne sert qu'à recaler : entre deux sondages, on
+// interpole localement à partir de l'horloge du navigateur, ce qui donne
+// une position à la milliseconde plutôt qu'au sondage.
+const SPOTIFY_POLL_MS = 3000;
+
+let playbackAnchor = null; // { progressMs, atPerfMs, durationMs, isPlaying, title, artist }
 let spotifyPollTimer = null;
-let spotifyTickTimer = null;
-let spotifyLocalProgressMs = 0;
-let spotifyLocalDurationMs = 0;
-let spotifyIsPlaying = false;
+let displayRafId = null;
+let lastRenderedSecond = -1;
 
 function formatMs(ms) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -885,58 +938,344 @@ function formatMs(ms) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-function renderSpotifyProgressTimes() {
-  const pct = spotifyLocalDurationMs ? Math.min(100, (spotifyLocalProgressMs / spotifyLocalDurationMs) * 100) : 0;
-  spotifyProgressFill.style.width = `${pct}%`;
-  spotifyProgressElapsed.textContent = formatMs(spotifyLocalProgressMs);
-  spotifyProgressDuration.textContent = formatMs(spotifyLocalDurationMs);
+// Position estimée maintenant = position reçue + temps écoulé depuis.
+function estimatedProgressMs() {
+  if (!playbackAnchor) return null;
+  if (!playbackAnchor.isPlaying) return playbackAnchor.progressMs;
+  const elapsed = performance.now() - playbackAnchor.atPerfMs;
+  return Math.min(playbackAnchor.progressMs + elapsed, playbackAnchor.durationMs || Infinity);
 }
 
-async function refreshSpotifyProgress() {
+async function refreshPlaybackAnchor() {
   const state = await fetchPlaybackState();
 
   if (!state) {
+    playbackAnchor = null;
     spotifyProgress.classList.add('hidden');
-    spotifyIsPlaying = false;
+    updateSyncBar();
     return;
   }
 
-  spotifyLocalProgressMs = state.progressMs;
-  spotifyLocalDurationMs = state.durationMs;
-  spotifyIsPlaying = state.isPlaying;
+  const previous = playbackAnchor;
+  playbackAnchor = {
+    progressMs: state.progressMs,
+    atPerfMs: state.anchoredAtPerfMs,
+    durationMs: state.durationMs,
+    isPlaying: state.isPlaying,
+    title: state.title,
+    artist: state.artist,
+  };
+
   spotifyProgressTrack.textContent = `${state.title} — ${state.artist}`;
-  renderSpotifyProgressTimes();
+  spotifyProgressDuration.textContent = formatMs(state.durationMs);
   spotifyProgress.classList.remove('hidden');
+
+  const trackChanged = !previous || previous.title !== state.title || previous.artist !== state.artist;
+  if (trackChanged && autoFollowEnabled) {
+    followPlayingTrack(state);
+  }
+
+  updateSyncBar();
 }
 
-function tickSpotifyProgress() {
-  if (!spotifyIsPlaying || spotifyProgress.classList.contains('hidden')) return;
-  spotifyLocalProgressMs = Math.min(spotifyLocalProgressMs + 1000, spotifyLocalDurationMs);
-  renderSpotifyProgressTimes();
+// Boucle d'affichage : tourne à la fréquence de rafraîchissement de
+// l'écran (~60 fois/seconde) pour la barre de progression et le
+// surlignage des paroles.
+function displayTick() {
+  const pos = estimatedProgressMs();
+
+  if (pos !== null) {
+    const duration = playbackAnchor.durationMs || 0;
+    const pct = duration ? Math.min(100, (pos / duration) * 100) : 0;
+    spotifyProgressFill.style.width = `${pct}%`;
+
+    const second = Math.floor(pos / 1000);
+    if (second !== lastRenderedSecond) {
+      lastRenderedSecond = second;
+      spotifyProgressElapsed.textContent = formatMs(pos);
+    }
+
+    updateKaraokeHighlight(pos);
+  }
+
+  displayRafId = requestAnimationFrame(displayTick);
 }
 
 function startSpotifyProgressTracking() {
   stopSpotifyProgressTracking();
   if (!isSpotifyConnected()) return;
 
-  refreshSpotifyProgress();
-  spotifyPollTimer = setInterval(refreshSpotifyProgress, 8000);
-  spotifyTickTimer = setInterval(tickSpotifyProgress, 1000);
+  refreshPlaybackAnchor();
+  spotifyPollTimer = setInterval(refreshPlaybackAnchor, SPOTIFY_POLL_MS);
+  displayRafId = requestAnimationFrame(displayTick);
 }
 
 function stopSpotifyProgressTracking() {
   if (spotifyPollTimer) clearInterval(spotifyPollTimer);
-  if (spotifyTickTimer) clearInterval(spotifyTickTimer);
+  if (displayRafId) cancelAnimationFrame(displayRafId);
   spotifyPollTimer = null;
-  spotifyTickTimer = null;
+  displayRafId = null;
+  playbackAnchor = null;
+  lastRenderedSecond = -1;
   spotifyProgress.classList.add('hidden');
+  syncBar.classList.add('hidden');
 }
+
+// La barre de progression se fige quand l'onglet passe en arrière-plan
+// (rAF suspendu) : on recale dès le retour.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && spotifyPollTimer) refreshPlaybackAnchor();
+});
+
+/* ---------- paroles synchronisées (karaoké) ---------- */
+
+const SYNC_OFFSET_KEY = 'pst-sync-offset';
+const AUTO_FOLLOW_KEY = 'pst-auto-follow';
+
+let syncedLines = [];      // [{ timeMs, text }]
+let syncedLineEls = [];    // <p> alignés sur syncedLines
+let activeLineIndex = -1;
+let lastManualScrollAt = 0;
+let autoFollowEnabled = localStorage.getItem(AUTO_FOLLOW_KEY) === '1';
+
+function getSyncOffsetMs() {
+  const raw = parseInt(localStorage.getItem(SYNC_OFFSET_KEY) || '0', 10);
+  return Number.isFinite(raw) ? raw : 0;
+}
+
+function setSyncOffsetMs(ms) {
+  const clamped = Math.max(-5000, Math.min(5000, ms));
+  localStorage.setItem(SYNC_OFFSET_KEY, String(clamped));
+  renderSyncOffsetLabel();
+}
+
+function renderSyncOffsetLabel() {
+  const seconds = getSyncOffsetMs() / 1000;
+  const sign = seconds > 0 ? '+' : seconds < 0 ? '−' : '';
+  syncOffsetLabel.textContent = `${sign}${Math.abs(seconds).toFixed(1).replace('.', ',')} s`;
+}
+
+// Format LRC : [mm:ss.cc] texte — plusieurs horodatages possibles par ligne.
+function parseLrc(lrc) {
+  const lines = [];
+
+  for (const raw of (lrc || '').split('\n')) {
+    const stamps = [...raw.matchAll(/\[(\d+):(\d{2})(?:[.:](\d{1,3}))?\]/g)];
+    if (!stamps.length) continue;
+
+    const text = raw.replace(/\[[^\]]*\]/g, '').trim();
+    for (const stamp of stamps) {
+      const minutes = parseInt(stamp[1], 10);
+      const seconds = parseInt(stamp[2], 10);
+      const fraction = stamp[3] ? parseInt(stamp[3].padEnd(3, '0'), 10) : 0;
+      lines.push({ timeMs: minutes * 60000 + seconds * 1000 + fraction, text });
+    }
+  }
+
+  lines.sort((a, b) => a.timeMs - b.timeMs);
+  return lines;
+}
+
+// Normalise pour comparer un titre Spotify ("X - Remastered 2011", "Y (feat. Z)")
+// avec celui d'une autre source.
+function normalizeTrackName(value) {
+  return (value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+    .replace(/\s-\s.*$/, ' ')
+    .replace(/\b(feat|ft|with|remaster(ed)?|version|live)\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function tracksMatch(a, b) {
+  const x = normalizeTrackName(a);
+  const y = normalizeTrackName(b);
+  if (!x || !y) return false;
+  return x === y || x.includes(y) || y.includes(x);
+}
+
+function isPlayingCurrentSong() {
+  if (!playbackAnchor || !currentSong) return false;
+  return (
+    tracksMatch(playbackAnchor.title, currentSong.title) &&
+    tracksMatch(playbackAnchor.artist, currentSong.artist)
+  );
+}
+
+function karaokeAvailable() {
+  return syncedLines.length > 0 && isPlayingCurrentSong();
+}
+
+function updateSyncBar() {
+  if (!karaokeAvailable()) {
+    syncBar.classList.add('hidden');
+    lyricsContent.classList.remove('synced');
+    clearKaraokeClasses();
+    return;
+  }
+
+  syncBar.classList.remove('hidden');
+  lyricsContent.classList.add('synced');
+  const paused = !playbackAnchor.isPlaying;
+  syncBar.classList.toggle('paused', paused);
+  syncStatus.textContent = paused ? 'Lecture en pause' : 'Synchronisé avec Spotify';
+}
+
+function clearKaraokeClasses() {
+  for (const el of syncedLineEls) el.classList.remove('active', 'done', 'next');
+  activeLineIndex = -1;
+}
+
+// Recherche dichotomique : robuste aux sauts (avance rapide, retour arrière).
+function findLineIndexAt(posMs) {
+  let low = 0;
+  let high = syncedLines.length - 1;
+  let found = -1;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (syncedLines[mid].timeMs <= posMs) {
+      found = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  return found;
+}
+
+function updateKaraokeHighlight(posMs) {
+  if (!karaokeAvailable()) return;
+
+  const index = findLineIndexAt(posMs - getSyncOffsetMs());
+  if (index === activeLineIndex) return;
+
+  for (const el of syncedLineEls) el.classList.remove('active', 'done', 'next');
+  for (let i = 0; i < index; i++) syncedLineEls[i].classList.add('done');
+  if (index >= 0 && syncedLineEls[index]) syncedLineEls[index].classList.add('active');
+  if (syncedLineEls[index + 1]) syncedLineEls[index + 1].classList.add('next');
+
+  activeLineIndex = index;
+
+  // On laisse la main à l'utilisateur s'il vient de faire défiler lui-même.
+  const userScrolledRecently = Date.now() - lastManualScrollAt < 6000;
+  if (index >= 0 && syncedLineEls[index] && !userScrolledRecently) {
+    syncedLineEls[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+window.addEventListener('wheel', () => { lastManualScrollAt = Date.now(); }, { passive: true });
+window.addEventListener('touchmove', () => { lastManualScrollAt = Date.now(); }, { passive: true });
+
+function renderSyncedLyrics(lines) {
+  syncedLines = lines;
+  syncedLineEls = [];
+  activeLineIndex = -1;
+  lyricsContent.innerHTML = '';
+
+  lines.forEach((line) => {
+    const p = document.createElement('p');
+    const text = line.text.trim();
+    if (!text) {
+      p.className = 'blank';
+      p.innerHTML = '&nbsp;';
+    } else if (text.startsWith('[')) {
+      p.className = 'tag';
+      p.textContent = text;
+    } else {
+      p.textContent = text;
+    }
+    lyricsContent.appendChild(p);
+    syncedLineEls.push(p);
+  });
+
+  currentLyrics = lines.map((l) => l.text).join('\n');
+  updateSyncBar();
+}
+
+function clearSyncedLyrics() {
+  syncedLines = [];
+  syncedLineEls = [];
+  activeLineIndex = -1;
+  lyricsContent.classList.remove('synced');
+  syncBar.classList.add('hidden');
+}
+
+/* ---------- suivi automatique de la lecture ---------- */
+
+async function followPlayingTrack(state) {
+  // Pas besoin de passer par la recherche : /api/lyrics travaille déjà à
+  // partir d'un couple artiste/titre.
+  if (currentSong && tracksMatch(state.title, currentSong.title) && tracksMatch(state.artist, currentSong.artist)) {
+    return;
+  }
+
+  const primaryArtist = state.artist.split(',')[0].trim();
+  currentSong = { artist: primaryArtist, title: state.title, thumbnail: null, id: null };
+
+  lyricsTitle.textContent = state.title;
+  lyricsArtist.innerHTML = `${state.artist} · <em>Spotify</em>`;
+  setCover(lyricsCover, { title: state.title, artist: primaryArtist, thumbnail: null });
+  replayVinyl();
+  setHalo(hueOf(state.title + primaryArtist));
+  hideLyricsExtras();
+  clearSyncedLyrics();
+  renderLyrics('Chargement des paroles…');
+
+  const params = new URLSearchParams({
+    artist: primaryArtist,
+    title: state.title,
+    sources: getEnabledSources().join(','),
+  });
+
+  try {
+    const res = await fetch(`/api/lyrics?${params.toString()}`);
+    const data = await res.json();
+
+    if (data.lyrics) {
+      applyLyricsPayload(data);
+    } else {
+      renderLyrics("Paroles introuvables pour cette chanson.");
+    }
+  } catch (err) {
+    renderLyrics('Erreur réseau, réessaie.');
+  }
+}
+
+function updateFollowButton() {
+  followButton.classList.toggle('hidden', !isSpotifyConnected());
+  followButton.classList.toggle('following', autoFollowEnabled);
+  followButton.textContent = autoFollowEnabled ? 'Suit Spotify ✓' : 'Suivre Spotify';
+}
+
+followButton.addEventListener('click', () => {
+  autoFollowEnabled = !autoFollowEnabled;
+  localStorage.setItem(AUTO_FOLLOW_KEY, autoFollowEnabled ? '1' : '0');
+  updateFollowButton();
+  if (autoFollowEnabled && playbackAnchor) followPlayingTrack(playbackAnchor);
+});
+
+syncOffsetDown.addEventListener('click', () => {
+  setSyncOffsetMs(getSyncOffsetMs() - 100);
+  activeLineIndex = -1;
+});
+
+syncOffsetUp.addEventListener('click', () => {
+  setSyncOffsetMs(getSyncOffsetMs() + 100);
+  activeLineIndex = -1;
+});
 
 /* ---------- init ---------- */
 
 setSize(getSize());
 renderRecents();
 renderLibrary();
+renderSyncOffsetLabel();
+updateFollowButton();
 input.focus();
 
 (async () => {

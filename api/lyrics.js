@@ -37,7 +37,13 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
 
   if (result) {
-    return res.status(200).json({ lyrics: result.lyrics, source: result.source });
+    return res.status(200).json({
+      lyrics: result.lyrics,
+      // Version horodatée (format LRC) quand la source en a une : sert au
+      // surlignage synchronisé avec la lecture Spotify.
+      syncedLyrics: result.synced || null,
+      source: result.source,
+    });
   }
 
   // Aucune source texte n'a trouvé la chanson : on propose le widget Genius

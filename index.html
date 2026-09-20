@@ -178,10 +178,22 @@
           <button id="translate-reset" class="tool hidden" type="button">Original</button>
         </div>
 
+        <button class="tool hidden" id="follow-button" type="button">Suivre Spotify</button>
+
         <div class="sizer">
           <button id="size-down" aria-label="Réduire le texte">A−</button>
           <span id="size-label">19px</span>
           <button id="size-up" aria-label="Agrandir le texte">A+</button>
+        </div>
+      </div>
+
+      <div id="sync-bar" class="hidden">
+        <span class="sync-pulse" aria-hidden="true"></span>
+        <span id="sync-status">Synchronisé avec Spotify</span>
+        <div class="sync-offset">
+          <button id="sync-offset-down" type="button" aria-label="Afficher les paroles plus tôt">−</button>
+          <span id="sync-offset-label">0,0 s</span>
+          <button id="sync-offset-up" type="button" aria-label="Afficher les paroles plus tard">+</button>
         </div>
       </div>
 

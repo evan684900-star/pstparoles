@@ -16,6 +16,9 @@ const spotifyProgressTrack = document.getElementById('spotify-progress-track');
 const spotifyProgressFill = document.getElementById('spotify-progress-fill');
 const spotifyProgressElapsed = document.getElementById('spotify-progress-elapsed');
 const spotifyProgressDuration = document.getElementById('spotify-progress-duration');
+const translateBar = document.getElementById('translate-bar');
+const translateSelect = document.getElementById('translate-select');
+const translateResetBtn = document.getElementById('translate-reset');
 
 function setStatus(message) {
   statusEl.textContent = message || '';
@@ -103,15 +106,35 @@ function showGeniusLink(url) {
   lyricsLink.classList.remove('hidden');
 }
 
+let originalLyricsText = '';
+
+function resetTranslateBar() {
+  translateSelect.value = '';
+  translateResetBtn.classList.add('hidden');
+}
+
+function showTranslatableLyrics(text) {
+  originalLyricsText = text;
+  lyricsContent.textContent = text;
+  resetTranslateBar();
+  translateBar.classList.remove('hidden');
+}
+
+function hideTranslateBar() {
+  translateBar.classList.add('hidden');
+  resetTranslateBar();
+}
+
 async function loadLyrics(song) {
   setStatus('');
   lyricsTitle.textContent = `${song.title} — ${song.artist}`;
   showGeniusLink(null);
+  hideTranslateBar();
   showLyricsView();
 
   // Le repli lyrics.ovh renvoie déjà les paroles directement lors de la recherche.
   if (song.source === 'lyricsovh' && song.lyrics) {
-    lyricsContent.textContent = song.lyrics;
+    showTranslatableLyrics(song.lyrics);
     scrollToLyrics();
     return;
   }
@@ -135,7 +158,7 @@ async function loadLyrics(song) {
     }
 
     if (data.lyrics) {
-      lyricsContent.textContent = data.lyrics;
+      showTranslatableLyrics(data.lyrics);
       scrollToLyrics();
       return;
     }
@@ -151,6 +174,45 @@ async function loadLyrics(song) {
 }
 
 backButton.addEventListener('click', showResults);
+
+// ---- Traduction des paroles ----
+
+translateSelect.addEventListener('change', async () => {
+  const target = translateSelect.value;
+  if (!target) {
+    lyricsContent.textContent = originalLyricsText;
+    translateResetBtn.classList.add('hidden');
+    return;
+  }
+
+  const previousText = lyricsContent.textContent;
+  lyricsContent.textContent = 'Traduction en cours...';
+
+  try {
+    const params = new URLSearchParams({ text: originalLyricsText, target });
+    const res = await fetch(`/api/translate?${params.toString()}`);
+    const data = await res.json();
+
+    if (!res.ok || !data.translated) {
+      lyricsContent.textContent = previousText;
+      setStatus(data.error || 'Traduction indisponible pour le moment.');
+      translateSelect.value = '';
+      return;
+    }
+
+    lyricsContent.textContent = data.translated;
+    translateResetBtn.classList.remove('hidden');
+  } catch (err) {
+    lyricsContent.textContent = previousText;
+    setStatus('Erreur réseau, réessaie.');
+    translateSelect.value = '';
+  }
+});
+
+translateResetBtn.addEventListener('click', () => {
+  lyricsContent.textContent = originalLyricsText;
+  resetTranslateBar();
+});
 
 // ---- Connexion Spotify (PKCE, sans backend secret) ----
 

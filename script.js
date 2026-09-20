@@ -270,14 +270,29 @@ function hideGeniusEmbed() {
 // Le widget officiel Genius (embed_content) : chargé dans le navigateur du
 // visiteur, donc pas bloqué comme le scraping direct.
 function renderGeniusEmbed(html) {
-  geniusEmbedContainer.innerHTML = html;
+  // Le script embed.js de Genius s'appuie sur document.write(), ce que les
+  // navigateurs modernes bloquent silencieusement pour un <script> injecté
+  // après coup dans la page principale (résultat : seul le texte de repli
+  // "Read More" reste visible). Solution standard pour ce genre de vieux
+  // widgets : on l'écrit dans un iframe fraîchement créé, où le script est
+  // "parsé normalement" comme s'il faisait partie du chargement initial de
+  // cette page — document.write y fonctionne alors comme prévu.
+  geniusEmbedContainer.innerHTML = '';
 
-  geniusEmbedContainer.querySelectorAll('script').forEach((oldScript) => {
-    const newScript = document.createElement('script');
-    for (const attr of oldScript.attributes) newScript.setAttribute(attr.name, attr.value);
-    newScript.textContent = oldScript.textContent;
-    oldScript.replaceWith(newScript);
-  });
+  const iframe = document.createElement('iframe');
+  iframe.className = 'genius-embed-frame';
+  iframe.setAttribute('scrolling', 'yes');
+  geniusEmbedContainer.appendChild(iframe);
+
+  const doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8" /><base target="_top" />
+    <style>
+      html,body{margin:0;padding:12px;background:#121216;color:#e9e7e2;font-family:'Space Grotesk',system-ui,sans-serif;}
+      a{color:#ffb545;}
+    </style>
+  </head><body>${html}</body></html>`);
+  doc.close();
 
   geniusEmbedWrapper.classList.remove('hidden');
 }

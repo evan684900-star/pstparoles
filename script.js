@@ -626,6 +626,66 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { closeLibraryPanel(); closeSettingsPanel(); }
 });
 
+/* ---------- easter egg : taper "karaoke" au clavier ---------- */
+
+const karaokeFx = document.getElementById('karaoke-fx');
+let karaokeKeyBuffer = '';
+let karaokeFxTimer = null;
+let karaokeFxInterval = null;
+
+const KARAOKE_COLORS = ['#ff3b30', '#ff9500', '#ffd60a', '#34c759', '#30b8c4', '#5ac8fa', '#af7ac5', '#ff2d95'];
+
+function randomKaraokeColor() {
+  return KARAOKE_COLORS[Math.floor(Math.random() * KARAOKE_COLORS.length)];
+}
+
+function paintKaraokeCells() {
+  const cells = karaokeFx.children;
+  for (let i = 0; i < cells.length; i++) {
+    const color = randomKaraokeColor();
+    cells[i].style.backgroundImage = `radial-gradient(circle at 35% 30%, rgba(255,255,255,.85), ${color} 65%)`;
+  }
+}
+
+function triggerKaraokeFx() {
+  if (karaokeFxInterval) return; // déjà en cours
+
+  const cellSize = 56;
+  const cols = Math.max(1, Math.ceil(window.innerWidth / cellSize));
+  const rows = Math.max(1, Math.ceil(window.innerHeight / cellSize));
+  const count = cols * rows;
+
+  karaokeFx.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < count; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'kf-cell';
+    frag.appendChild(cell);
+  }
+  karaokeFx.appendChild(frag);
+
+  paintKaraokeCells();
+  karaokeFx.classList.add('active');
+  karaokeFxInterval = setInterval(paintKaraokeCells, 140);
+
+  karaokeFxTimer = setTimeout(() => {
+    karaokeFx.classList.remove('active');
+    clearInterval(karaokeFxInterval);
+    karaokeFxInterval = null;
+    setTimeout(() => { karaokeFx.innerHTML = ''; }, 350);
+  }, 10000);
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key.length !== 1) return;
+  karaokeKeyBuffer = (karaokeKeyBuffer + e.key.toLowerCase()).slice(-'karaoke'.length);
+  if (karaokeKeyBuffer === 'karaoke') {
+    karaokeKeyBuffer = '';
+    if (karaokeFxTimer) clearTimeout(karaokeFxTimer);
+    triggerKaraokeFx();
+  }
+});
+
 /* ---------- paramètres : choix des sources de paroles ---------- */
 
 const SETTINGS_SOURCES_KEY = 'pstparoles_sources';

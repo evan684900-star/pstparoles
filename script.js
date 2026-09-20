@@ -288,8 +288,12 @@ function renderGeniusEmbed(html) {
   doc.open();
   doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8" /><base target="_top" />
     <style>
-      html,body{margin:0;padding:12px;background:#121216;color:#e9e7e2;font-family:'Space Grotesk',system-ui,sans-serif;}
+      html,body{margin:0;padding:0;background:#fff;font-family:'Space Grotesk',system-ui,sans-serif;overflow-x:hidden;}
       a{color:#ffb545;}
+      /* Le widget imbriqué de Genius garde sa largeur fixe par défaut :
+         on force son propre iframe à occuper toute la largeur dispo. */
+      iframe{width:100% !important;max-width:100% !important;height:100% !important;border:0 !important;display:block !important;}
+      .rg_embed_link{display:block;}
     </style>
   </head><body>${html}</body></html>`);
   doc.close();

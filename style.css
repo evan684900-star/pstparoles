@@ -707,11 +707,11 @@ h1 {
   text-transform: uppercase;
   margin: 0 0 .6rem;
 }
-#genius-embed { border-radius: 14px; overflow: hidden; background: #121216; }
+#genius-embed { border-radius: 14px; overflow: hidden; background: #fff; }
 .genius-embed-frame {
   display: block;
   width: 100%;
-  height: 620px;
+  height: 700px;
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 14px;
 }

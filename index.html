@@ -24,6 +24,25 @@
         <path d="M122,35 C160,50 178,80 168,108 C163,88 148,72 122,63 Z" fill="currentColor" />
       </svg>
       <span class="brand-name">pstparoles</span>
+
+      <div class="menu-wrapper">
+        <button id="menu-toggle" type="button" aria-label="Menu" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <line x1="4" y1="7" x2="20" y2="7" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="17" x2="20" y2="17" />
+          </svg>
+        </button>
+
+        <div id="library-panel">
+          <div class="library-panel-header">
+            <span>Bibliothèque</span>
+            <span id="library-count" class="library-count">0</span>
+          </div>
+          <ul id="library-list"></ul>
+          <p id="library-empty" class="library-empty">Aucune chanson enregistrée pour l'instant.</p>
+        </div>
+      </div>
     </div>
 
     <form id="search-form">
@@ -96,7 +115,18 @@
         </div>
       </div>
 
-      <h2 id="lyrics-title"></h2>
+      <div class="lyrics-title-row">
+        <h2 id="lyrics-title"></h2>
+        <button id="save-button" class="hidden" type="button">
+          <svg class="save-icon-empty" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" />
+          </svg>
+          <svg class="save-icon-filled" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" />
+          </svg>
+          <span class="save-label">Enregistrer</span>
+        </button>
+      </div>
 
       <div id="translate-bar" class="hidden">
         <label for="translate-select">Traduire vers</label>

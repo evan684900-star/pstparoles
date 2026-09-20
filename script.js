@@ -404,11 +404,13 @@ async function loadLyrics(song) {
       renderLyrics('');
       renderGeniusEmbed(data.embedHtml);
       showGeniusLink(data.geniusUrl);
+      updateSyncBar(); // aucune version horodatée ici non plus
       return;
     }
 
     renderLyrics("Les paroles de cette chanson ne sont pas disponibles pour le moment.");
     showGeniusLink(data.geniusUrl);
+    updateSyncBar();
   } catch (err) {
     renderLyrics('Erreur réseau, réessaie.');
   }

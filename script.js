@@ -51,6 +51,8 @@ const saveButton = document.getElementById('save-button');
 const settingsToggle = document.getElementById('settings-toggle');
 const settingsPanel = document.getElementById('settings-panel');
 const settingsSourcesList = document.getElementById('settings-sources-list');
+const settingsSpotifyAccount = document.getElementById('settings-spotify-account');
+const spotifyDisconnectBtn = document.getElementById('spotify-disconnect');
 
 const geniusEmbedWrapper = document.getElementById('genius-embed-wrapper');
 const geniusEmbedContainer = document.getElementById('genius-embed');
@@ -1116,10 +1118,16 @@ function updateSpotifyBanner() {
 
 function updateSpotifyUI() {
   spotifyNowPlayingBtn.classList.toggle('hidden', !isSpotifyConnected());
+  settingsSpotifyAccount.classList.toggle('hidden', !isSpotifyConnected());
   updateSpotifyBanner();
   updateFollowButton();
   if (!isSpotifyConnected()) stopSpotifyProgressTracking();
 }
+
+spotifyDisconnectBtn.addEventListener('click', () => {
+  disconnectSpotify();
+  closeSettingsPanel();
+});
 
 spotifyConnectBtn.addEventListener('click', connectSpotify);
 

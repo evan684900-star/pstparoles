@@ -19,11 +19,18 @@
 
 * { box-sizing: border-box; }
 
+/* Le halo décoratif déborde volontairement de l'écran : sans clip à la
+   racine, le document devient plus large que l'écran sur mobile (on peut
+   alors faire défiler vers la droite sur du vide, et pincer pour
+   dézoomer). `clip` plutôt que `hidden` : ça ne crée pas de conteneur de
+   défilement, donc le scroll fluide et position:sticky restent intacts. */
+html { overflow-x: clip; }
+
 body {
   margin: 0;
   min-height: 100vh;
   position: relative;
-  overflow-x: hidden;
+  overflow-x: clip;
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);

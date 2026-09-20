@@ -338,7 +338,7 @@ renderLibrary();
 
 const SETTINGS_SOURCES_KEY = 'pstparoles_sources';
 const AVAILABLE_SOURCES = [
-  { key: 'lrclib', label: 'LRCLIB' },
+  { key: 'lrclib', label: 'LRCLIB', badge: 'Le plus complet' },
   { key: 'lyricsovh', label: 'lyrics.ovh' },
   { key: 'textyl', label: 'Textyl' },
   { key: 'lyrist', label: 'Lyrist' },
@@ -370,7 +370,8 @@ function renderSettings() {
     li.innerHTML = `
       <label for="${id}">
         <input type="checkbox" id="${id}" data-source="${source.key}" ${enabled.has(source.key) ? 'checked' : ''} />
-        ${source.label}
+        <span class="settings-source-name">${source.label}</span>
+        ${source.badge ? `<span class="settings-source-badge">${source.badge}</span>` : ''}
       </label>
     `;
     settingsSourcesList.appendChild(li);

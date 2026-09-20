@@ -892,17 +892,19 @@ h1 {
   align-items: center;
   justify-content: center;
   background: rgba(6,6,8,.86);
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(0px);
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity .25s ease;
+  transition: opacity .3s ease, backdrop-filter .32s ease, visibility 0s linear .3s;
 }
-.cover-lightbox:not(.hidden) {
+.cover-lightbox.open {
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
+  backdrop-filter: blur(6px);
+  transition: opacity .3s ease, backdrop-filter .32s ease, visibility 0s linear 0s;
 }
-/* .hidden garde display:none pour l'accessibilité (hors flux clavier/lecteur d'écran) */
-.cover-lightbox.hidden { display: flex; }
 
 .lightbox-cover {
   position: relative;
@@ -912,10 +914,15 @@ h1 {
   overflow: hidden;
   background: #1a1a1f;
   box-shadow: 0 40px 80px -30px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.06);
-  transform: scale(.92);
-  transition: transform .28s cubic-bezier(.2,.8,.2,1);
+  opacity: 0;
+  transform: scale(.7) translateY(26px);
+  transition: transform .38s cubic-bezier(.2,.9,.25,1.14), opacity .26s ease;
 }
-.cover-lightbox:not(.hidden) .lightbox-cover { transform: scale(1); }
+.cover-lightbox.open .lightbox-cover {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  transition-delay: .04s;
+}
 .lightbox-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .lightbox-cover span {
   position: absolute; inset: 0;
@@ -935,9 +942,12 @@ h1 {
   font-size: 22px;
   line-height: 1;
   cursor: pointer;
-  transition: background .2s ease, transform .2s ease;
+  opacity: 0;
+  transform: scale(.7) rotate(-45deg);
+  transition: background .2s ease, transform .3s cubic-bezier(.2,.9,.25,1.14) .12s, opacity .2s ease .12s;
 }
-.lightbox-close:hover { background: rgba(255,255,255,.12); transform: scale(1.06); }
+.cover-lightbox.open .lightbox-close { opacity: 1; transform: scale(1) rotate(0deg); }
+.lightbox-close:hover { background: rgba(255,255,255,.12); transform: scale(1.06) rotate(90deg); }
 
 @media (max-width: 480px) {
   .lightbox-cover { width: min(84vw, 340px); height: min(84vw, 340px); border-radius: 18px; }

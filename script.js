@@ -122,11 +122,11 @@ function setCover(container, song) {
 function openCoverLightbox() {
   if (!currentSong) return;
   setCover(lightboxCover, currentSong);
-  coverLightbox.classList.remove('hidden');
+  coverLightbox.classList.add('open');
 }
 
 function closeCoverLightbox() {
-  coverLightbox.classList.add('hidden');
+  coverLightbox.classList.remove('open');
 }
 
 lyricsCover.addEventListener('click', openCoverLightbox);

@@ -11,6 +11,7 @@ const lyricsTitle = document.getElementById('lyrics-title');
 const lyricsArtist = document.getElementById('lyrics-artist');
 const lyricsContent = document.getElementById('lyrics-content');
 const lyricsCover = document.getElementById('lyrics-cover');
+const vinylSlot = document.getElementById('vinyl-slot');
 const backButton = document.getElementById('back-button');
 const copyButton = document.getElementById('copy-button');
 const shareButton = document.getElementById('share-button');
@@ -103,6 +104,13 @@ function setCover(container, song) {
   container.innerHTML = song.thumbnail
     ? `<img src="${song.thumbnail}" alt="" loading="lazy" />`
     : `<span>${initials(song.artist)}</span>`;
+}
+
+// Relance la sortie du vinyle à chaque nouvelle chanson.
+function replayVinyl() {
+  vinylSlot.style.animation = 'none';
+  void vinylSlot.offsetWidth;
+  vinylSlot.style.animation = '';
 }
 
 /* ---------- recherches récentes ---------- */
@@ -313,6 +321,7 @@ async function loadLyrics(song) {
   lyricsTitle.textContent = song.title;
   lyricsArtist.innerHTML = `${song.artist} · <em>${SOURCE_LABELS[song.source] || song.source}</em>`;
   setCover(lyricsCover, song);
+  replayVinyl();
   setHalo(hueOf(song.title + song.artist));
   hideLyricsExtras();
   showLyricsView();
@@ -534,6 +543,7 @@ function loadFromLibrary(item) {
   lyricsTitle.textContent = item.title;
   lyricsArtist.innerHTML = `${item.artist} · <em>Bibliothèque</em>`;
   setCover(lyricsCover, item);
+  replayVinyl();
   setHalo(hueOf(item.title + item.artist));
   hideLyricsExtras();
   showLyricsView();

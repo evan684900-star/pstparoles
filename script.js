@@ -62,6 +62,7 @@ const SOURCE_LABELS = {
   lyrist: 'Lyrist',
   chartlyrics: 'ChartLyrics',
   genius: 'Genius',
+  youtube: 'YouTube',
 };
 
 let currentLyrics = '';
@@ -191,9 +192,63 @@ function showLyricsView() {
 
 /* ---------- recherche ---------- */
 
+const YOUTUBE_URL_RE = /^https?:\/\/(www\.|m\.)?(youtube\.com\/(watch\?|shorts\/)|youtu\.be\/)/i;
+
+// Devine artiste/titre à partir du titre brut d'une vidéo YouTube
+// ("Artiste - Titre (Official Video)" est le format le plus courant).
+// Le nettoyage plus fin ("(Official Video)", "feat. X"...) est déjà géré
+// côté serveur par cleanQueryText() lors du second essai dans /api/lyrics.
+// Retire les suffixes vidéo courants ("(Official Video)", "[Lyrics]"...)
+// pour un affichage propre. cleanQueryText() côté serveur s'occupe déjà du
+// nettoyage utile à la recherche de paroles ; ceci est juste pour l'affichage.
+function stripVideoSuffix(text) {
+  return (text || '')
+    .replace(/\s*[([]\s*(official\s*)?(music\s*)?(video|audio|lyrics?|hd|4k|visualizer|full\s*song)\s*[)\]]/gi, '')
+    .trim();
+}
+
+function parseYoutubeTitle(title, author) {
+  const raw = (title || '').trim();
+  const parts = raw.split(/\s[-–—]\s/);
+  if (parts.length >= 2) {
+    return { artist: parts[0].trim(), title: stripVideoSuffix(parts.slice(1).join(' - ').trim()) };
+  }
+  return { artist: (author || '').replace(/\s*-\s*Topic$/i, '').trim(), title: stripVideoSuffix(raw) };
+}
+
+async function runYoutubeSearch(url) {
+  pushRecent(url);
+  resultsEl.innerHTML = '';
+  lastResults = [];
+  emptyEl.hidden = true;
+  lyricsView.hidden = true;
+  resultsEl.hidden = false;
+  skeletons.hidden = false;
+  setStatus('Récupération du titre YouTube…');
+
+  try {
+    const res = await fetch(`/api/youtube-title?url=${encodeURIComponent(url)}`);
+    const data = await res.json();
+    skeletons.hidden = true;
+
+    if (!res.ok) { setStatus(data.error || 'Vidéo YouTube introuvable.', true); return; }
+
+    const { artist, title } = parseYoutubeTitle(data.title, data.author);
+    if (!title) { setStatus('Impossible de lire le titre de cette vidéo.', true); return; }
+
+    setStatus('');
+    loadLyrics({ source: 'youtube', artist: artist || 'Artiste inconnu', title, thumbnail: data.thumbnail || null, url: null, id: null });
+  } catch (err) {
+    skeletons.hidden = true;
+    setStatus('Erreur réseau, réessaie.', true);
+  }
+}
+
 async function runSearch(query) {
   query = (query || '').trim();
   if (!query) return;
+
+  if (YOUTUBE_URL_RE.test(query)) { runYoutubeSearch(query); return; }
 
   pushRecent(query);
   resultsEl.innerHTML = '';

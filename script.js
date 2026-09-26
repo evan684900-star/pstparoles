@@ -572,6 +572,61 @@ function resetTranslateBar() {
   translateResetBtn.classList.add('hidden');
 }
 
+/* ---------- cache des traductions ---------- */
+
+// Traduire prend plusieurs secondes : on garde le résultat pour que
+// retraduire la même chanson dans la même langue soit instantané.
+const TRANSLATION_CACHE_KEY = 'pst-translations';
+const TRANSLATION_CACHE_MAX = 40;
+
+function translationCacheKey(song, target) {
+  return `${song.artist}|${song.title}|${target}`.toLowerCase();
+}
+
+function readTranslationCache() {
+  try {
+    return JSON.parse(localStorage.getItem(TRANSLATION_CACHE_KEY) || '{}');
+  } catch (err) {
+    return {};
+  }
+}
+
+function getCachedTranslation(song, target) {
+  if (!song) return null;
+  return readTranslationCache()[translationCacheKey(song, target)] || null;
+}
+
+function cacheTranslation(song, target, value) {
+  if (!song) return;
+  try {
+    const cache = readTranslationCache();
+    cache[translationCacheKey(song, target)] = value;
+    // localStorage est petit et des paroles traduites sont volumineuses :
+    // on ne garde que les dernières entrées.
+    const keys = Object.keys(cache);
+    for (const key of keys.slice(0, Math.max(0, keys.length - TRANSLATION_CACHE_MAX))) {
+      delete cache[key];
+    }
+    localStorage.setItem(TRANSLATION_CACHE_KEY, JSON.stringify(cache));
+  } catch (err) {
+    // quota dépassé : le cache n'est qu'un confort, on continue sans
+  }
+}
+
+// Une traduction synchronisée est un tableau (une entrée par ligne
+// horodatée) ; une traduction simple est une chaîne.
+function applyTranslation(value, synced) {
+  if (synced && Array.isArray(value)) {
+    renderSyncedLyrics(currentSyncedLines, value);
+    return true;
+  }
+  if (!synced && typeof value === 'string') {
+    renderLyrics(value);
+    return true;
+  }
+  return false;
+}
+
 translateSelect.addEventListener('change', async () => {
   const target = translateSelect.value;
   if (!target) {
@@ -580,27 +635,47 @@ translateSelect.addEventListener('change', async () => {
     return;
   }
 
-  const previousText = currentLyrics;
-  renderLyrics('Traduction en cours…');
+  const synced = currentSyncedLines.length > 0;
+
+  if (applyTranslation(getCachedTranslation(currentSong, target), synced)) {
+    translateResetBtn.classList.remove('hidden');
+    setStatus('');
+    return;
+  }
+
+  // On laisse les paroles affichées pendant la traduction : les effacer
+  // détruirait les lignes synchronisées (et leur surlignage en cours).
+  setStatus('Traduction en cours…');
+  translateSelect.disabled = true;
 
   try {
-    const params = new URLSearchParams({ text: originalLyricsText, target });
+    // En mode synchronisé, la source doit être les lignes horodatées :
+    // le texte brut de la chanson n'a pas forcément le même découpage.
+    const sourceText = synced
+      ? currentSyncedLines.map((l) => l.text).join('\n')
+      : originalLyricsText;
+
+    const params = new URLSearchParams({ text: sourceText, target });
+    if (synced) params.set('lines', '1');
+
     const res = await fetch(`/api/translate?${params.toString()}`);
     const data = await res.json();
 
-    if (!res.ok || !data.translated) {
-      renderLyrics(previousText);
+    const value = synced ? data.lines : data.translated;
+    if (!res.ok || !applyTranslation(value, synced)) {
       setStatus(data.error || 'Traduction indisponible pour le moment.', true);
       translateSelect.value = '';
       return;
     }
 
-    renderLyrics(data.translated);
+    cacheTranslation(currentSong, target, value);
+    setStatus('');
     translateResetBtn.classList.remove('hidden');
   } catch (err) {
-    renderLyrics(previousText);
     setStatus('Erreur réseau, réessaie.', true);
     translateSelect.value = '';
+  } finally {
+    translateSelect.disabled = false;
   }
 });
 
@@ -1451,13 +1526,17 @@ function updateKaraokeHighlight(posMs) {
 window.addEventListener('wheel', () => { lastManualScrollAt = Date.now(); }, { passive: true });
 window.addEventListener('touchmove', () => { lastManualScrollAt = Date.now(); }, { passive: true });
 
-function renderSyncedLyrics(lines) {
+// `translations` est facultatif : quand il est fourni (une entrée par
+// ligne), la traduction s'affiche sous l'originale, en gardant les mêmes
+// horodatages donc le même surlignage.
+function renderSyncedLyrics(lines, translations) {
   syncedLines = lines;
   syncedLineEls = [];
   activeLineIndex = -1;
   lyricsContent.innerHTML = '';
+  lyricsContent.classList.toggle('bilingual', Boolean(translations));
 
-  lines.forEach((line) => {
+  lines.forEach((line, i) => {
     const p = document.createElement('p');
     const text = line.text.trim();
     if (!text) {
@@ -1468,6 +1547,17 @@ function renderSyncedLyrics(lines) {
       p.textContent = text;
     } else {
       p.textContent = text;
+      // Le texte d'origine reste accessible séparément : la carte de
+      // citation ne doit pas ramasser la traduction avec.
+      p.dataset.original = text;
+
+      const translated = translations && translations[i] ? translations[i].trim() : '';
+      if (translated && translated !== text) {
+        const tr = document.createElement('span');
+        tr.className = 'lyr-tr';
+        tr.textContent = translated;
+        p.appendChild(tr);
+      }
     }
     lyricsContent.appendChild(p);
     syncedLineEls.push(p);
@@ -1481,7 +1571,7 @@ function clearSyncedLyrics() {
   syncedLines = [];
   syncedLineEls = [];
   activeLineIndex = -1;
-  lyricsContent.classList.remove('synced');
+  lyricsContent.classList.remove('synced', 'bilingual');
   syncBar.classList.add('hidden');
   syncBar.classList.remove('unavailable', 'paused');
 }
@@ -1855,7 +1945,7 @@ function cardFileName(song) {
 }
 
 async function generateCard() {
-  const lines = pickedEls().map((el) => el.textContent.trim()).filter(Boolean);
+  const lines = pickedEls().map((el) => (el.dataset.original || el.textContent).trim()).filter(Boolean);
   if (!lines.length || !currentSong) return;
 
   pickGo.disabled = true;

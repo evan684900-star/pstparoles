@@ -857,6 +857,26 @@ h1 {
 }
 #lyrics-content.synced p.next { color: #8e8d98; }
 
+/* ---------- traduction sous chaque ligne (bilingue) ---------- */
+
+#lyrics-content.bilingual p { margin-bottom: 9px; }
+
+.lyr-tr {
+  display: block;
+  margin-top: 1px;
+  font-family: var(--sans);
+  font-size: .68em;
+  line-height: 1.45;
+  color: var(--faint);
+  transition: color .28s ease;
+}
+#lyrics-content.synced p.active .lyr-tr { color: rgba(255, 181, 69, .74); }
+#lyrics-content.synced p.next .lyr-tr { color: #6a6974; }
+#lyrics-content.synced p.done .lyr-tr { color: #4a4951; }
+
+/* La ligne traduite ne doit pas grossir autant que l'originale. */
+body.concert .lyr-tr { font-size: .5em; }
+
 #sync-bar {
   display: flex;
   align-items: center;

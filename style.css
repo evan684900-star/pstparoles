@@ -953,6 +953,200 @@ h1 {
 [hidden] { display: none !important; }
 .hidden { display: none !important; }
 
+/* ---------- mode concert (plein écran) ---------- */
+
+.concert-bar {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 60;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: calc(10px + var(--safe-top)) clamp(14px, 4vw, 26px) 10px;
+  background: linear-gradient(180deg, rgba(10,10,12,.96), rgba(10,10,12,.7) 70%, transparent);
+}
+body.concert .concert-bar { display: flex; }
+
+.concert-meta { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.concert-meta strong {
+  font-size: .95rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.concert-meta span { font-size: .78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+#concert-exit {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.05);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .2s, background .2s, transform .2s;
+}
+#concert-exit:hover { color: var(--text); background: rgba(255,255,255,.1); transform: scale(1.06); }
+
+/* Tout le décor disparaît : il ne reste que les paroles (et les contrôles
+   Spotify, utiles pour mettre en pause sans quitter le mode). */
+body.concert .head,
+body.concert #search-form,
+body.concert .search-hint,
+body.concert #recents,
+body.concert #status,
+body.concert #skeletons,
+body.concert #results,
+body.concert #empty,
+body.concert .site-footer,
+body.concert .toolbar,
+body.concert #spotify-banner,
+body.concert .song-head,
+body.concert #sync-bar,
+body.concert #genius-embed-wrapper,
+body.concert #lyrics-link,
+body.concert .back { display: none !important; }
+
+body.concert main {
+  max-width: 1000px;
+  padding-top: calc(72px + var(--safe-top));
+  padding-bottom: 45vh; /* la dernière ligne peut monter au centre de l'écran */
+}
+
+body.concert #lyrics-content { gap: 10px; }
+body.concert #lyrics-content p {
+  font-size: clamp(32px, 7.5vw, 54px);
+  line-height: 1.5;
+  text-align: center;
+}
+body.concert #lyrics-content.synced p.active { transform: scale(1.06); }
+
+/* ---------- carte de citation ---------- */
+
+/* Mode sélection : les lignes deviennent cliquables. */
+#lyrics-content.picking p:not(.blank) {
+  cursor: pointer;
+  border-radius: 8px;
+  padding-left: 10px;
+  margin-left: -10px;
+  padding-right: 10px;
+  margin-right: -10px;
+  transition: background .15s ease, color .15s ease;
+}
+#lyrics-content.picking p:not(.blank):hover { background: rgba(255,255,255,.06); }
+#lyrics-content.picking p.picked {
+  background: rgba(255,181,69,.16);
+  color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.pick-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(18,18,22,.96);
+  box-shadow: 0 20px 40px -14px rgba(0,0,0,.7);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, 20px);
+  transition: opacity .25s ease, transform .3s cubic-bezier(.2,.9,.25,1.15), visibility 0s linear .25s;
+}
+.pick-bar.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+  transition: opacity .25s ease, transform .3s cubic-bezier(.2,.9,.25,1.15), visibility 0s linear 0s;
+}
+.pick-hint { font-size: .8rem; color: var(--muted); padding-left: 6px; }
+.pick-cancel, .pick-go {
+  border-radius: 999px;
+  padding: .45rem .9rem;
+  font-size: .84rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.05);
+  color: var(--muted);
+  transition: background .15s, color .15s, opacity .15s;
+}
+.pick-cancel:hover { background: rgba(255,255,255,.1); color: var(--text); }
+.pick-go {
+  border-color: transparent;
+  background: var(--accent);
+  color: #26180a;
+  font-weight: 600;
+}
+.pick-go:disabled { opacity: .4; cursor: default; }
+.pick-go:not(:disabled):hover { background: #ffc46a; }
+
+.card-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 520;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 4vw, 32px);
+  background: rgba(6,6,8,.9);
+  backdrop-filter: blur(0px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .25s ease, backdrop-filter .3s ease, visibility 0s linear .25s;
+}
+.card-modal.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  backdrop-filter: blur(12px);
+  transition: opacity .25s ease, backdrop-filter .3s ease, visibility 0s linear 0s;
+}
+
+.card-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-height: 100%;
+  transform: scale(.9) translateY(16px);
+  transition: transform .32s cubic-bezier(.2,.9,.25,1.14);
+}
+.card-modal.open .card-inner { transform: scale(1) translateY(0); }
+
+#card-preview {
+  max-width: min(88vw, 400px);
+  max-height: 68vh;
+  width: auto;
+  border-radius: 16px;
+  box-shadow: 0 40px 80px -24px rgba(0,0,0,.85), 0 0 0 1px rgba(255,255,255,.08);
+}
+
+.card-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+.card-close {
+  position: absolute;
+  top: max(18px, var(--safe-top));
+  right: 20px;
+  display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: var(--text);
+  cursor: pointer;
+  transition: background .2s ease, transform .2s ease;
+}
+.card-close:hover { background: rgba(255,255,255,.12); transform: scale(1.06); }
+
 /* ---------- pochette en grand ---------- */
 
 .cover-lightbox {

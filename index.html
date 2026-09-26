@@ -22,6 +22,27 @@
     <div class="lightbox-cover" id="lightbox-cover"><span></span></div>
   </div>
 
+  <div class="pick-bar" id="pick-bar">
+    <span class="pick-hint" id="pick-hint">Choisis jusqu'à 4 lignes</span>
+    <button class="pick-cancel" id="pick-cancel" type="button">Annuler</button>
+    <button class="pick-go" id="pick-go" type="button" disabled>Créer la carte</button>
+  </div>
+
+  <div class="card-modal" id="card-modal" role="dialog" aria-modal="true" aria-label="Aperçu de la carte">
+    <button class="card-close" id="card-close" type="button" aria-label="Fermer">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <path d="M6 6l12 12M18 6L6 18" />
+      </svg>
+    </button>
+    <div class="card-inner">
+      <img id="card-preview" alt="Aperçu de la carte de citation" />
+      <div class="card-actions">
+        <button class="tool" id="card-download" type="button">Télécharger</button>
+        <button class="tool hidden" id="card-share" type="button">Partager</button>
+      </div>
+    </div>
+  </div>
+
   <main>
     <header class="head">
       <div>
@@ -118,6 +139,18 @@
     </div>
 
     <section id="lyrics-view" hidden>
+      <div class="concert-bar" id="concert-bar">
+        <div class="concert-meta">
+          <strong id="concert-title"></strong>
+          <span id="concert-artist"></span>
+        </div>
+        <button id="concert-exit" type="button" aria-label="Quitter le mode concert">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+
       <button id="back-button" class="back">← Retour aux résultats</button>
 
       <div id="spotify-banner" class="hidden">
@@ -177,6 +210,18 @@
       <div class="toolbar">
         <button class="tool" id="copy-button">Copier les paroles</button>
         <button class="tool" id="share-button">Partager</button>
+        <button class="tool hidden" id="card-button" type="button">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px">
+            <rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 10h7M7 14h10" />
+          </svg>
+          Créer une carte
+        </button>
+        <button class="tool hidden" id="concert-button" type="button">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px">
+            <path d="M3 9V5a2 2 0 0 1 2-2h4M21 9V5a2 2 0 0 0-2-2h-4M3 15v4a2 2 0 0 0 2 2h4M21 15v4a2 2 0 0 1-2 2h-4" />
+          </svg>
+          Mode concert
+        </button>
         <button class="tool" id="save-button">
           <svg class="save-icon-empty" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px">
             <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" />

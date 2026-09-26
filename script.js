@@ -16,6 +16,21 @@ const lightboxCover = document.getElementById('lightbox-cover');
 const lightboxClose = document.getElementById('lightbox-close');
 const vinylSlot = document.getElementById('vinyl-slot');
 const backButton = document.getElementById('back-button');
+const cardButton = document.getElementById('card-button');
+const concertButton = document.getElementById('concert-button');
+const concertBar = document.getElementById('concert-bar');
+const concertTitle = document.getElementById('concert-title');
+const concertArtist = document.getElementById('concert-artist');
+const concertExit = document.getElementById('concert-exit');
+const pickBar = document.getElementById('pick-bar');
+const pickHint = document.getElementById('pick-hint');
+const pickCancel = document.getElementById('pick-cancel');
+const pickGo = document.getElementById('pick-go');
+const cardModal = document.getElementById('card-modal');
+const cardPreview = document.getElementById('card-preview');
+const cardClose = document.getElementById('card-close');
+const cardDownload = document.getElementById('card-download');
+const cardShare = document.getElementById('card-share');
 const copyButton = document.getElementById('copy-button');
 const shareButton = document.getElementById('share-button');
 const halo = document.getElementById('halo');
@@ -199,6 +214,8 @@ document.getElementById('size-up').addEventListener('click', () => setSize(getSi
 /* ---------- vues ---------- */
 
 function showResults() {
+  exitConcertMode();
+  exitPickMode();
   lyricsView.hidden = true;
   resultsEl.hidden = false;
   form.hidden = false;
@@ -370,6 +387,8 @@ function showTranslatableLyrics(text) {
   resetTranslateBar();
   translateControl.classList.remove('hidden');
   saveButton.classList.remove('hidden');
+  cardButton.classList.remove('hidden');
+  concertButton.classList.remove('hidden');
   updateSaveButtonState();
 }
 
@@ -393,6 +412,8 @@ function applyLyricsPayload(data) {
   resetTranslateBar();
   translateControl.classList.remove('hidden');
   saveButton.classList.remove('hidden');
+  cardButton.classList.remove('hidden');
+  concertButton.classList.remove('hidden');
   updateSaveButtonState();
 }
 
@@ -405,6 +426,9 @@ function restoreOriginalLyrics() {
 function hideLyricsExtras() {
   translateControl.classList.add('hidden');
   saveButton.classList.add('hidden');
+  cardButton.classList.add('hidden');
+  concertButton.classList.add('hidden');
+  exitPickMode();
   currentSyncedLines = [];
   clearSyncedLyrics();
   resetTranslateBar();
@@ -724,7 +748,15 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { closeLibraryPanel(); closeSettingsPanel(); closeCoverLightbox(); }
+  if (e.key !== 'Escape') return;
+  closeLibraryPanel();
+  closeSettingsPanel();
+
+  // On ferme la couche la plus haute en premier, une seule par appui.
+  if (cardModal.classList.contains('open')) { closeCardModal(); return; }
+  if (!coverLightbox.classList.contains('open') && lyricsContent.classList.contains('picking')) { exitPickMode(); return; }
+  closeCoverLightbox();
+  exitConcertMode();
 });
 
 /* ---------- easter egg : taper "karaoke" au clavier ---------- */
@@ -1516,6 +1548,369 @@ syncOffsetDown.addEventListener('click', () => {
 syncOffsetUp.addEventListener('click', () => {
   setSyncOffsetMs(getSyncOffsetMs() + 100);
   activeLineIndex = -1;
+});
+
+/* ---------- mode concert (plein écran) ---------- */
+
+let wakeLock = null;
+
+// Empêche l'écran de s'éteindre pendant qu'on chante. Le navigateur peut
+// refuser (batterie faible, API absente) : ce n'est jamais bloquant.
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+  } catch (err) {
+    wakeLock = null;
+  }
+}
+
+function releaseWakeLock() {
+  if (!wakeLock) return;
+  wakeLock.release().catch(() => {});
+  wakeLock = null;
+}
+
+function inConcertMode() {
+  return document.body.classList.contains('concert');
+}
+
+function enterConcertMode() {
+  if (!currentSong || inConcertMode()) return;
+  exitPickMode();
+
+  document.body.classList.add('concert');
+  concertTitle.textContent = currentSong.title;
+  concertArtist.textContent = currentSong.artist;
+  requestWakeLock();
+
+  // Le plein écran natif n'existe pas sur iOS Safari : le mode CSS tient
+  // debout tout seul, donc un refus n'empêche rien.
+  if (document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
+
+  // La mise en page vient de changer : on recentre la ligne en cours sans
+  // attendre le prochain changement de ligne.
+  lastManualScrollAt = 0;
+  setTimeout(recenterActiveLine, 120);
+}
+
+function exitConcertMode() {
+  if (!inConcertMode()) return;
+  document.body.classList.remove('concert');
+  releaseWakeLock();
+
+  if (document.fullscreenElement && document.exitFullscreen) {
+    document.exitFullscreen().catch(() => {});
+  }
+
+  lastManualScrollAt = 0;
+  setTimeout(recenterActiveLine, 120);
+}
+
+function recenterActiveLine() {
+  const el = syncedLineEls[activeLineIndex];
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+concertButton.addEventListener('click', enterConcertMode);
+concertExit.addEventListener('click', exitConcertMode);
+
+// Sortie du plein écran natif (touche Échap du navigateur, geste système) :
+// on quitte aussi le mode concert pour rester cohérent.
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && inConcertMode()) exitConcertMode();
+});
+
+// Le verrou d'écran saute dès que l'onglet passe en arrière-plan.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && inConcertMode() && !wakeLock) requestWakeLock();
+});
+
+/* ---------- carte de citation ---------- */
+
+const MAX_PICKED_LINES = 4;
+const CARD_W = 1080;
+const CARD_H = 1350;
+
+let cardBlob = null;
+let cardObjectUrl = null;
+
+function pickedEls() {
+  return Array.from(lyricsContent.querySelectorAll('p.picked'));
+}
+
+function updatePickBar() {
+  const n = pickedEls().length;
+  pickGo.disabled = n === 0;
+  pickGo.textContent = n ? `Créer la carte (${n})` : 'Créer la carte';
+  pickHint.textContent = n >= MAX_PICKED_LINES
+    ? `Maximum ${MAX_PICKED_LINES} lignes`
+    : `Choisis jusqu'à ${MAX_PICKED_LINES} lignes`;
+}
+
+function enterPickMode() {
+  if (!currentLyrics.trim()) return;
+  exitConcertMode();
+  lyricsContent.classList.add('picking');
+  pickBar.classList.add('open');
+  updatePickBar();
+}
+
+function exitPickMode() {
+  lyricsContent.classList.remove('picking');
+  pickBar.classList.remove('open');
+  for (const el of pickedEls()) el.classList.remove('picked');
+}
+
+cardButton.addEventListener('click', () => {
+  if (lyricsContent.classList.contains('picking')) exitPickMode();
+  else enterPickMode();
+});
+
+pickCancel.addEventListener('click', exitPickMode);
+
+lyricsContent.addEventListener('click', (e) => {
+  if (!lyricsContent.classList.contains('picking')) return;
+  const p = e.target.closest('p');
+  if (!p || p.classList.contains('blank') || !lyricsContent.contains(p)) return;
+
+  if (p.classList.contains('picked')) {
+    p.classList.remove('picked');
+  } else {
+    if (pickedEls().length >= MAX_PICKED_LINES) {
+      updatePickBar();
+      return;
+    }
+    p.classList.add('picked');
+  }
+  updatePickBar();
+});
+
+// Charge la pochette sans "tainter" le canvas : si l'hébergeur ne renvoie
+// pas d'en-tête CORS, on retombe simplement sur la tuile à initiales.
+function loadImageForCanvas(src) {
+  return new Promise((resolve) => {
+    if (!src) return resolve(null);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function wrapLine(ctx, text, maxWidth) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const out = [];
+  let current = '';
+  for (const w of words) {
+    const test = current ? `${current} ${w}` : w;
+    if (current && ctx.measureText(test).width > maxWidth) {
+      out.push(current);
+      current = w;
+    } else {
+      current = test;
+    }
+  }
+  if (current) out.push(current);
+  return out.length ? out : [''];
+}
+
+async function buildQuoteCard(lines, song) {
+  const canvas = document.createElement('canvas');
+  canvas.width = CARD_W;
+  canvas.height = CARD_H;
+  const ctx = canvas.getContext('2d');
+
+  const tint = hueOf(song.title + song.artist);
+
+  // Les polices doivent être prêtes avant de mesurer/dessiner du texte.
+  try {
+    await Promise.all([
+      document.fonts.load('400 64px "Instrument Serif"'),
+      document.fonts.load('600 30px "Space Grotesk"'),
+      document.fonts.load('400 24px "JetBrains Mono"'),
+    ]);
+  } catch (err) {
+    // polices indisponibles : on dessine avec les polices de secours
+  }
+
+  // Fond + halo, comme sur le site.
+  ctx.fillStyle = '#0a0a0c';
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+
+  const halo = ctx.createRadialGradient(CARD_W / 2, 90, 0, CARD_W / 2, 90, 760);
+  halo.addColorStop(0, tint);
+  halo.addColorStop(1, 'rgba(10,10,12,0)');
+  ctx.globalAlpha = 0.28;
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 0, CARD_W, 900);
+  ctx.globalAlpha = 1;
+
+  // --- en-tête : pochette + titre / artiste ---
+  const pad = 88;
+  const coverSize = 150;
+  const coverY = 96;
+
+  const img = await loadImageForCanvas(song.thumbnail);
+  ctx.save();
+  roundRectPath(ctx, pad, coverY, coverSize, coverSize, 22);
+  ctx.clip();
+  if (img) {
+    // équivalent de object-fit: cover
+    const scale = Math.max(coverSize / img.width, coverSize / img.height);
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    ctx.drawImage(img, pad + (coverSize - dw) / 2, coverY + (coverSize - dh) / 2, dw, dh);
+  } else {
+    const grad = ctx.createLinearGradient(pad, coverY, pad + coverSize, coverY + coverSize);
+    grad.addColorStop(0, tint);
+    grad.addColorStop(1, '#0a0a0c');
+    ctx.fillStyle = grad;
+    ctx.fillRect(pad, coverY, coverSize, coverSize);
+    ctx.fillStyle = 'rgba(0,0,0,.6)';
+    ctx.font = '400 62px "Instrument Serif", Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(initials(song.artist), pad + coverSize / 2, coverY + coverSize / 2);
+  }
+  ctx.restore();
+
+  const textX = pad + coverSize + 34;
+  const maxMetaW = CARD_W - textX - pad;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+
+  ctx.fillStyle = '#f2f0ec';
+  ctx.font = '400 48px "Instrument Serif", Georgia, serif';
+  const titleLines = wrapLine(ctx, song.title, maxMetaW).slice(0, 2);
+  titleLines.forEach((l, i) => ctx.fillText(l, textX, coverY + 58 + i * 54));
+
+  ctx.fillStyle = '#8e8d98';
+  ctx.font = '500 28px "Space Grotesk", system-ui, sans-serif';
+  ctx.fillText(wrapLine(ctx, song.artist, maxMetaW)[0], textX, coverY + 62 + titleLines.length * 54);
+
+  // --- bloc de citation, centré et dimensionné pour tenir ---
+  const quoteTop = 360;
+  const quoteBottom = CARD_H - 190;
+  const maxQuoteW = CARD_W - pad * 2;
+  const maxQuoteH = quoteBottom - quoteTop;
+
+  let fontSize = 66;
+  let wrapped = [];
+  for (; fontSize >= 28; fontSize -= 2) {
+    ctx.font = `400 ${fontSize}px "Instrument Serif", Georgia, serif`;
+    wrapped = [];
+    for (const line of lines) wrapped.push(...wrapLine(ctx, line, maxQuoteW));
+    if (wrapped.length * fontSize * 1.42 <= maxQuoteH) break;
+  }
+
+  const lineHeight = fontSize * 1.42;
+  const blockH = wrapped.length * lineHeight;
+  let y = quoteTop + (maxQuoteH - blockH) / 2 + fontSize;
+
+  // petit trait d'accent au-dessus de la citation
+  ctx.fillStyle = tint;
+  ctx.fillRect(pad, y - fontSize - 52, 72, 5);
+
+  ctx.fillStyle = '#f2f0ec';
+  ctx.font = `400 ${fontSize}px "Instrument Serif", Georgia, serif`;
+  for (const l of wrapped) {
+    ctx.fillText(l, pad, y);
+    y += lineHeight;
+  }
+
+  // --- pied de carte ---
+  ctx.fillStyle = 'rgba(255,255,255,.1)';
+  ctx.fillRect(pad, CARD_H - 132, CARD_W - pad * 2, 1);
+
+  ctx.fillStyle = '#63626c';
+  ctx.font = '400 26px "JetBrains Mono", ui-monospace, monospace';
+  ctx.fillText('pstparoles', pad, CARD_H - 78);
+
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+}
+
+function cardFileName(song) {
+  const base = `${song.artist}-${song.title}`
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  return `pstparoles-${base || 'citation'}.png`;
+}
+
+async function generateCard() {
+  const lines = pickedEls().map((el) => el.textContent.trim()).filter(Boolean);
+  if (!lines.length || !currentSong) return;
+
+  pickGo.disabled = true;
+  pickGo.textContent = 'Création…';
+
+  try {
+    cardBlob = await buildQuoteCard(lines, currentSong);
+    if (!cardBlob) throw new Error('canvas vide');
+
+    if (cardObjectUrl) URL.revokeObjectURL(cardObjectUrl);
+    cardObjectUrl = URL.createObjectURL(cardBlob);
+    cardPreview.src = cardObjectUrl;
+
+    // Le partage de fichier n'existe pas partout : on n'affiche le bouton
+    // que si le navigateur sait réellement partager cette image.
+    const file = new File([cardBlob], cardFileName(currentSong), { type: 'image/png' });
+    const canShareFile = Boolean(navigator.canShare && navigator.canShare({ files: [file] }));
+    cardShare.classList.toggle('hidden', !canShareFile);
+
+    exitPickMode();
+    cardModal.classList.add('open');
+  } catch (err) {
+    setStatus("Impossible de créer la carte pour cette chanson.", true);
+  } finally {
+    updatePickBar();
+  }
+}
+
+pickGo.addEventListener('click', generateCard);
+
+function closeCardModal() {
+  cardModal.classList.remove('open');
+}
+
+cardClose.addEventListener('click', closeCardModal);
+cardModal.addEventListener('click', (e) => {
+  if (e.target === cardModal) closeCardModal();
+});
+
+cardDownload.addEventListener('click', () => {
+  if (!cardObjectUrl) return;
+  const a = document.createElement('a');
+  a.href = cardObjectUrl;
+  a.download = cardFileName(currentSong || { artist: '', title: '' });
+  a.click();
+});
+
+cardShare.addEventListener('click', async () => {
+  if (!cardBlob || !currentSong) return;
+  const file = new File([cardBlob], cardFileName(currentSong), { type: 'image/png' });
+  try {
+    await navigator.share({ files: [file], title: `${currentSong.title} — ${currentSong.artist}` });
+  } catch (err) {
+    // partage annulé par l'utilisateur : rien à signaler
+  }
 });
 
 /* ---------- init ---------- */

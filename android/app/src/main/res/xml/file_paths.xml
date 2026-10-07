@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Cartes de citation générées, partagées via FileProvider -->
+    <cache-path name="cards" path="cards/" />
+</paths>

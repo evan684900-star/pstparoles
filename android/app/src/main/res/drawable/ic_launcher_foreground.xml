@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Les quatre barres d'égaliseur du logo du site, sur la zone sûre 66dp
+     de l'icône adaptative (108dp). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FFFFB545" android:pathData="M36,58h6v14h-6z" />
+    <path android:fillColor="#BFFFB545" android:pathData="M46,42h6v30h-6z" />
+    <path android:fillColor="#FFFFB545" android:pathData="M56,50h6v22h-6z" />
+    <path android:fillColor="#99FFB545" android:pathData="M66,36h6v36h-6z" />
+</vector>

@@ -226,6 +226,7 @@ function showResults() {
   closeLibraryPanel();
   closeSettingsPanel();
   stopSpotifyProgressTracking();
+  releaseWakeLock();
 }
 
 function goHome() {
@@ -251,6 +252,7 @@ function showLyricsView() {
   setStatus('');
   updateSpotifyBanner();
   startSpotifyProgressTracking();
+  requestWakeLock();
 }
 
 /* ---------- recherche ---------- */
@@ -1640,16 +1642,18 @@ syncOffsetUp.addEventListener('click', () => {
   activeLineIndex = -1;
 });
 
-/* ---------- mode concert (plein écran) ---------- */
+/* ---------- écran toujours allumé ---------- */
 
 let wakeLock = null;
 
-// Empêche l'écran de s'éteindre pendant qu'on chante. Le navigateur peut
-// refuser (batterie faible, API absente) : ce n'est jamais bloquant.
+// Tant que la vue paroles est ouverte, l'écran ne se met pas en veille (on
+// lit ou on chante sans toucher le téléphone). Le navigateur peut refuser
+// (batterie faible, API absente) : ce n'est jamais bloquant.
 async function requestWakeLock() {
-  if (!('wakeLock' in navigator)) return;
+  if (!('wakeLock' in navigator) || wakeLock || document.hidden) return;
   try {
     wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
   } catch (err) {
     wakeLock = null;
   }
@@ -1660,6 +1664,8 @@ function releaseWakeLock() {
   wakeLock.release().catch(() => {});
   wakeLock = null;
 }
+
+/* ---------- mode concert (plein écran) ---------- */
 
 function inConcertMode() {
   return document.body.classList.contains('concert');
@@ -1672,7 +1678,6 @@ function enterConcertMode() {
   document.body.classList.add('concert');
   concertTitle.textContent = currentSong.title;
   concertArtist.textContent = currentSong.artist;
-  requestWakeLock();
 
   // Le plein écran natif n'existe pas sur iOS Safari : le mode CSS tient
   // debout tout seul, donc un refus n'empêche rien.
@@ -1689,7 +1694,6 @@ function enterConcertMode() {
 function exitConcertMode() {
   if (!inConcertMode()) return;
   document.body.classList.remove('concert');
-  releaseWakeLock();
 
   if (document.fullscreenElement && document.exitFullscreen) {
     document.exitFullscreen().catch(() => {});
@@ -1713,9 +1717,9 @@ document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement && inConcertMode()) exitConcertMode();
 });
 
-// Le verrou d'écran saute dès que l'onglet passe en arrière-plan.
+// Le verrou saute dès que l'onglet passe en arrière-plan : on le reprend au retour.
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && inConcertMode() && !wakeLock) requestWakeLock();
+  if (!document.hidden && !lyricsView.hidden) requestWakeLock();
 });
 
 /* ---------- carte de citation ---------- */

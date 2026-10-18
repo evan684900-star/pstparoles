@@ -137,6 +137,86 @@ function setCover(container, song) {
   container.innerHTML = song.thumbnail
     ? `<img src="${song.thumbnail}" alt="" loading="lazy" />`
     : `<span>${initials(song.artist)}</span>`;
+  if (container === lyricsCover) updateVinylColor(song);
+}
+
+/* ---------- couleur du vinyle = couleur dominante de la pochette ---------- */
+
+const vinylColorCache = new Map();
+let vinylColorToken = 0;
+
+function loadImage(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+// La couleur qui couvre le plus de surface. Les pixels quasi noirs sont
+// écartés : une étiquette noire disparaîtrait sur le disque noir. Les pixels
+// sont regroupés par teintes proches (16 niveaux par canal), puis on moyenne
+// le groupe gagnant pour retrouver une couleur réelle de la pochette.
+function dominantColorOf(img) {
+  const size = 40;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, size, size);
+
+  let data;
+  try {
+    data = ctx.getImageData(0, 0, size, size).data;
+  } catch (err) {
+    return null;
+  }
+
+  const buckets = new Map();
+  const tally = (skipDark) => {
+    buckets.clear();
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 200) continue;
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      if (skipDark && 0.299 * r + 0.587 * g + 0.114 * b < 40) continue;
+      const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+      const bucket = buckets.get(key) || { n: 0, r: 0, g: 0, b: 0 };
+      bucket.n++; bucket.r += r; bucket.g += g; bucket.b += b;
+      buckets.set(key, bucket);
+    }
+  };
+
+  tally(true);
+  if (!buckets.size) tally(false); // pochette entièrement sombre
+
+  let best = null;
+  for (const bucket of buckets.values()) if (!best || bucket.n > best.n) best = bucket;
+  if (!best) return null;
+
+  let r = best.r / best.n, g = best.g / best.n, b = best.b / best.n;
+  // Une couleur très sombre se verrait à peine sur le vinyle : on l'éclaircit un peu.
+  if (0.299 * r + 0.587 * g + 0.114 * b < 60) {
+    r += (255 - r) * 0.22; g += (255 - g) * 0.22; b += (255 - b) * 0.22;
+  }
+  return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+}
+
+async function updateVinylColor(song) {
+  const token = ++vinylColorToken;
+  // En attendant (ou sans pochette) : la teinte propre à la chanson.
+  vinylSlot.style.setProperty('--vinyl', hueOf(song.title + song.artist));
+  if (!song.thumbnail) return;
+
+  let color = vinylColorCache.get(song.thumbnail);
+  if (!color) {
+    // Via notre domaine : le navigateur n'autorise la lecture des pixels
+    // d'une image que si elle vient de la même origine (ou envoie du CORS).
+    const img = await loadImage(`/api/cover?url=${encodeURIComponent(song.thumbnail)}`);
+    color = img ? dominantColorOf(img) : null;
+    if (color) vinylColorCache.set(song.thumbnail, color);
+  }
+  if (color && token === vinylColorToken) vinylSlot.style.setProperty('--vinyl', color);
 }
 
 // Pochette en grand : réutilise setCover() pour un rendu identique
@@ -1152,6 +1232,7 @@ async function fetchPlaybackState() {
     artist: data.item.artists.map((a) => a.name).join(', '),
     progressMs: (data.progress_ms || 0) + latencyCompensationMs,
     durationMs: data.item.duration_ms || 0,
+    coverUrl: (data.item.album && data.item.album.images && data.item.album.images[0] && data.item.album.images[0].url) || null,
     isPlaying: Boolean(data.is_playing),
     anchoredAtPerfMs: receivedAt,
   };
@@ -1588,11 +1669,11 @@ async function followPlayingTrack(state) {
   }
 
   const primaryArtist = state.artist.split(',')[0].trim();
-  currentSong = { artist: primaryArtist, title: state.title, thumbnail: null, id: null };
+  currentSong = { artist: primaryArtist, title: state.title, thumbnail: state.coverUrl || null, id: null };
 
   lyricsTitle.textContent = state.title;
   lyricsArtist.innerHTML = `${state.artist} · <em>Spotify</em>`;
-  setCover(lyricsCover, { title: state.title, artist: primaryArtist, thumbnail: null });
+  setCover(lyricsCover, { title: state.title, artist: primaryArtist, thumbnail: state.coverUrl || null });
   replayVinyl();
   setHalo(hueOf(state.title + primaryArtist));
   hideLyricsExtras();

@@ -2100,4 +2100,18 @@ input.focus();
 (async () => {
   await handleSpotifyRedirect();
   updateSpotifyUI();
+  openSharedLink();
 })();
+
+// "Partager" vers le site installé (Android) : le lien ou le texte partagé
+// arrive dans l'adresse (?q=... ou ?url=...), et on lance la recherche.
+function openSharedLink() {
+  const params = new URLSearchParams(window.location.search);
+  const shared = params.get('url') || params.get('q');
+  if (!shared) return;
+  window.history.replaceState({}, document.title, window.location.pathname);
+  const link = (shared.match(/https?:\/\/\S+/) || [])[0];
+  const query = link && YOUTUBE_URL_RE.test(link) ? link : shared;
+  input.value = query;
+  runSearch(query);
+}

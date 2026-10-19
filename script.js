@@ -71,6 +71,7 @@ const settingsPanel = document.getElementById('settings-panel');
 const settingsSourcesList = document.getElementById('settings-sources-list');
 const settingsSpotifyAccount = document.getElementById('settings-spotify-account');
 const spotifyDisconnectBtn = document.getElementById('spotify-disconnect');
+const spotifyAccountLabel = document.getElementById('spotify-account-label');
 
 const geniusEmbedWrapper = document.getElementById('genius-embed-wrapper');
 const geniusEmbedContainer = document.getElementById('genius-embed');
@@ -1130,6 +1131,7 @@ async function connectSpotify() {
 }
 
 function disconnectSpotify() {
+  localStorage.removeItem('spotify_display_name');
   localStorage.removeItem(LS_ACCESS_TOKEN);
   localStorage.removeItem(LS_REFRESH_TOKEN);
   localStorage.removeItem(LS_EXPIRES_AT);
@@ -1233,7 +1235,9 @@ function playbackIssueMessage() {
   const issue = lastPlaybackIssue || {};
   switch (issue.kind) {
     case 'nothing':
-      return "Spotify ne signale aucune lecture en cours. Lance une chanson dans l'appli Spotify (hors session privée), puis réessaie.";
+      return "Spotify ne signale aucune lecture en cours"
+        + (spotifyAccountName() ? ` sur le compte « ${spotifyAccountName()} »` : '')
+        + ". Vérifie que l'appli Spotify joue bien sur ce compte (et pas un autre), hors session privée, puis réessaie.";
     case 'unsupported':
       return "Ce que tu écoutes (podcast ou publicité) n'a pas de paroles.";
     case 'expired':
@@ -1395,6 +1399,34 @@ function updateSpotifyBanner() {
   spotifyBanner.classList.toggle('hidden', isSpotifyConnected() || dismissed);
 }
 
+// Nom du compte Spotify connecté : permet de repérer qu'on est connecté à un
+// autre compte que celui qui joue la musique (ex. après un changement d'e-mail).
+function spotifyAccountName() {
+  return localStorage.getItem('spotify_display_name') || '';
+}
+
+function renderSpotifyAccountLabel() {
+  const name = spotifyAccountName();
+  spotifyAccountLabel.textContent = name ? `Connecté en tant que « ${name} »` : '';
+  spotifyAccountLabel.classList.toggle('hidden', !name);
+}
+
+async function loadSpotifyProfile() {
+  if (!isSpotifyConnected() || spotifyAccountName()) return;
+  try {
+    const token = await getValidSpotifyToken();
+    if (!token) return;
+    const res = await fetch('https://api.spotify.com/v1/me', { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return;
+    const me = await res.json();
+    const name = me.display_name || me.id;
+    if (name) localStorage.setItem('spotify_display_name', name);
+    renderSpotifyAccountLabel();
+  } catch (err) {
+    // simple confort d'affichage : on réessaiera au prochain démarrage
+  }
+}
+
 function updateSpotifyUI() {
   // Un point d'entrée Spotify reste toujours visible : "En écoute" quand on
   // est connecté, "Connecter Spotify" sinon (sur iPhone, l'appli installée et
@@ -1403,6 +1435,8 @@ function updateSpotifyUI() {
   spotifyConnectHomeBtn.classList.toggle('hidden', isSpotifyConnected());
   settingsSpotifyAccount.classList.toggle('hidden', !isSpotifyConnected());
   settingsSpotifyConnect.classList.toggle('hidden', isSpotifyConnected());
+  renderSpotifyAccountLabel();
+  loadSpotifyProfile();
   updateSpotifyBanner();
   updateFollowButton();
   if (!isSpotifyConnected()) stopSpotifyProgressTracking();

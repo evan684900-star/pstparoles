@@ -239,6 +239,19 @@ h1 {
   cursor: pointer;
   transition: background .15s ease, border-color .15s ease;
 }
+.settings-connect-btn {
+  width: 100%;
+  padding: .55rem .8rem;
+  border-radius: 10px;
+  border: 1px solid rgba(29,185,84,.35);
+  background: rgba(29,185,84,.1);
+  color: var(--spotify-green);
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.settings-connect-btn:hover { background: rgba(29,185,84,.2); }
 .settings-disconnect-btn:hover { background: rgba(255,80,80,.16); border-color: rgba(255,80,80,.4); }
 
 .panel-count {
@@ -407,7 +420,8 @@ h1 {
 }
 #search-form button[type="submit"]:active { transform: translateY(0) scale(.98); }
 
-#spotify-now-playing {
+#spotify-now-playing,
+#spotify-connect-home {
   flex: 0 0 auto;
   display: flex; align-items: center; gap: 7px;
   padding: 16px 20px;
@@ -421,8 +435,10 @@ h1 {
   cursor: pointer;
   transition: background .2s, transform .2s;
 }
-#spotify-now-playing:hover { background: rgba(29,185,84,.2); }
-#spotify-now-playing:active { transform: scale(.97); }
+#spotify-now-playing:hover,
+#spotify-connect-home:hover { background: rgba(29,185,84,.2); }
+#spotify-now-playing:active,
+#spotify-connect-home:active { transform: scale(.97); }
 
 /* ---------- recents ---------- */
 

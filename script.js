@@ -38,6 +38,9 @@ const sizeLabel = document.getElementById('size-label');
 const lyricsLink = document.getElementById('lyrics-link');
 
 const spotifyNowPlayingBtn = document.getElementById('spotify-now-playing');
+const spotifyConnectHomeBtn = document.getElementById('spotify-connect-home');
+const settingsSpotifyConnect = document.getElementById('settings-spotify-connect');
+const spotifyConnectSettingsBtn = document.getElementById('spotify-connect-settings');
 const spotifyBanner = document.getElementById('spotify-banner');
 const spotifyConnectBtn = document.getElementById('spotify-connect');
 const spotifyDismissBtn = document.getElementById('spotify-dismiss');
@@ -1108,8 +1111,8 @@ async function connectSpotify() {
 
   const verifier = randomString(64);
   const state = randomString(16);
-  sessionStorage.setItem('spotify_verifier', verifier);
-  sessionStorage.setItem('spotify_state', state);
+  localStorage.setItem('spotify_verifier', verifier);
+  localStorage.setItem('spotify_state', state);
 
   const challenge = await codeChallengeFromVerifier(verifier);
 
@@ -1141,16 +1144,31 @@ async function handleSpotifyRedirect() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
   const state = params.get('state');
-  if (!code) return;
+  if (!code) {
+    // L'utilisateur a refusé l'accès, ou Spotify a renvoyé une erreur.
+    if (params.get('error') && params.has('state')) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setStatus('Connexion à Spotify annulée.', true);
+    }
+    return;
+  }
 
   window.history.replaceState({}, document.title, window.location.pathname);
 
-  const expectedState = sessionStorage.getItem('spotify_state');
-  const verifier = sessionStorage.getItem('spotify_verifier');
-  if (!verifier || state !== expectedState) return;
+  const expectedState = localStorage.getItem('spotify_state');
+  const verifier = localStorage.getItem('spotify_verifier');
+  if (!verifier || state !== expectedState) {
+    // Typiquement : la connexion a démarré dans l'appli installée mais est
+    // revenue dans Safari (ou l'inverse), qui n'ont pas le même stockage.
+    setStatus("La connexion à Spotify n'a pas pu se terminer ici. Réessaie depuis cet écran, sans changer d'appli entre-temps.", true);
+    return;
+  }
 
   const clientId = await getSpotifyClientId();
-  if (!clientId) return;
+  if (!clientId) {
+    setStatus("Spotify n'est pas configuré sur ce site pour le moment.", true);
+    return;
+  }
 
   try {
     const res = await fetch(SPOTIFY_TOKEN_URL, {
@@ -1169,9 +1187,10 @@ async function handleSpotifyRedirect() {
     storeSpotifyTokens(data);
   } catch (err) {
     console.error('Erreur connexion Spotify:', err);
+    setStatus("La connexion à Spotify a échoué, réessaie.", true);
   } finally {
-    sessionStorage.removeItem('spotify_verifier');
-    sessionStorage.removeItem('spotify_state');
+    localStorage.removeItem('spotify_verifier');
+    localStorage.removeItem('spotify_state');
   }
 }
 
@@ -1307,8 +1326,13 @@ function updateSpotifyBanner() {
 }
 
 function updateSpotifyUI() {
+  // Un point d'entrée Spotify reste toujours visible : "En écoute" quand on
+  // est connecté, "Connecter Spotify" sinon (sur iPhone, l'appli installée et
+  // Safari ont chacun leur propre connexion).
   spotifyNowPlayingBtn.classList.toggle('hidden', !isSpotifyConnected());
+  spotifyConnectHomeBtn.classList.toggle('hidden', isSpotifyConnected());
   settingsSpotifyAccount.classList.toggle('hidden', !isSpotifyConnected());
+  settingsSpotifyConnect.classList.toggle('hidden', isSpotifyConnected());
   updateSpotifyBanner();
   updateFollowButton();
   if (!isSpotifyConnected()) stopSpotifyProgressTracking();
@@ -1320,6 +1344,8 @@ spotifyDisconnectBtn.addEventListener('click', () => {
 });
 
 spotifyConnectBtn.addEventListener('click', connectSpotify);
+spotifyConnectHomeBtn.addEventListener('click', connectSpotify);
+spotifyConnectSettingsBtn.addEventListener('click', () => { closeSettingsPanel(); connectSpotify(); });
 
 spotifyDismissBtn.addEventListener('click', () => {
   sessionStorage.setItem('spotify_banner_dismissed', '1');

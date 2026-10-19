@@ -986,6 +986,44 @@ body.concert .lyr-tr { font-size: .5em; }
   opacity: .8;
 }
 
+/* ---------- mention sur les droits (bas de l'accueil) ---------- */
+
+.legal {
+  margin: 14px auto 0;
+  max-width: 520px;
+  text-align: center;
+  font-size: .72rem;
+  line-height: 1.55;
+  color: var(--faint);
+}
+/* uniquement sur l'accueil : masquée dès qu'on ouvre des paroles */
+main:has(#lyrics-view:not([hidden])) .legal { display: none; }
+
+.legal summary {
+  list-style: none;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 4px 6px;
+}
+.legal summary::-webkit-details-marker { display: none; }
+.legal summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.legal-line { display: block; }
+.legal-toggle {
+  display: inline-block;
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: .68rem;
+  color: var(--muted);
+  border-bottom: 1px dashed rgba(255,255,255,.22);
+  transition: color .2s;
+}
+.legal summary:hover .legal-toggle { color: var(--accent); }
+.legal .when-open { display: none; }
+.legal details[open] .when-open { display: inline; }
+.legal details[open] .when-closed { display: none; }
+.legal-more { padding: 8px 6px 2px; animation: fadeIn .35s ease both; }
+.legal-more p { margin: 0 0 8px; }
+
 [hidden] { display: none !important; }
 .hidden { display: none !important; }
 
@@ -1035,6 +1073,7 @@ body.concert #skeletons,
 body.concert #results,
 body.concert #empty,
 body.concert .site-footer,
+body.concert .legal,
 body.concert .toolbar,
 body.concert #spotify-banner,
 body.concert .song-head,

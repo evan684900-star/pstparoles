@@ -1225,24 +1225,94 @@ async function getValidSpotifyToken() {
   return refreshSpotifyToken();
 }
 
+// Pourquoi le dernier appel n'a rien renvoyé : permet d'afficher une vraie
+// explication plutôt qu'un "aucune lecture" qui ne dit rien de la cause.
+let lastPlaybackIssue = null;
+
+function playbackIssueMessage() {
+  const issue = lastPlaybackIssue || {};
+  switch (issue.kind) {
+    case 'nothing':
+      return "Spotify ne signale aucune lecture en cours. Lance une chanson dans l'appli Spotify (hors session privée), puis réessaie.";
+    case 'unsupported':
+      return "Ce que tu écoutes (podcast ou publicité) n'a pas de paroles.";
+    case 'expired':
+      return 'Ta session Spotify a expiré : reconnecte-toi (réglages, Compte Spotify).';
+    case 'forbidden':
+      return "Spotify refuse l'accès" + (issue.detail ? ` (« ${issue.detail} »)` : '') + ". Vérifie que l'e-mail de ton compte est dans User Management du tableau de bord développeur Spotify, puis déconnecte-toi et reconnecte-toi pour redonner les permissions.";
+    case 'rate':
+      return 'Spotify limite les requêtes pour le moment, réessaie dans quelques secondes.';
+    case 'network':
+      return 'Erreur réseau, réessaie.';
+    default:
+      return issue.status ? `Spotify a répondu une erreur (${issue.status}).` : "Impossible de lire l'état de Spotify.";
+  }
+}
+
 async function fetchPlaybackState() {
-  const token = await getValidSpotifyToken();
-  if (!token) return null;
+  lastPlaybackIssue = null;
+  let token;
+  try {
+    token = await getValidSpotifyToken();
+  } catch (err) {
+    lastPlaybackIssue = { kind: 'network' };
+    return null;
+  }
+  if (!token) {
+    lastPlaybackIssue = { kind: 'expired' };
+    return null;
+  }
 
   // On mesure l'aller-retour réseau : la position renvoyée correspond au
   // moment où Spotify a traité la requête, donc quelque part entre l'envoi
   // et la réception. On compense avec la moitié du temps de trajet.
-  const sentAt = performance.now();
-  const res = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
-    headers: { Authorization: `Bearer ${token}` },
+  const request = (tok) => fetch('https://api.spotify.com/v1/me/player/currently-playing?additional_types=episode', {
+    headers: { Authorization: `Bearer ${tok}` },
   });
+  let sentAt = performance.now();
+  let res;
+  try {
+    res = await request(token);
+    if (res.status === 401) {
+      // Jeton refusé alors qu'il paraissait valide (révoqué, horloge...) : un renouvellement, puis on réessaie.
+      const fresh = await refreshSpotifyToken();
+      if (fresh) {
+        sentAt = performance.now();
+        res = await request(fresh);
+      }
+    }
+  } catch (err) {
+    lastPlaybackIssue = { kind: 'network' };
+    return null;
+  }
   const receivedAt = performance.now();
 
-  if (res.status === 204) return null;
-  if (!res.ok) return null;
+  if (res.status === 204) {
+    lastPlaybackIssue = { kind: 'nothing' };
+    return null;
+  }
+  if (!res.ok) {
+    let detail = '';
+    try { detail = ((await res.json()).error || {}).message || ''; } catch (err) { /* corps vide */ }
+    console.error('Spotify currently-playing:', res.status, detail);
+    lastPlaybackIssue = {
+      kind: res.status === 401 ? 'expired' : res.status === 403 ? 'forbidden' : res.status === 429 ? 'rate' : 'other',
+      status: res.status,
+      detail,
+    };
+    return null;
+  }
 
   const data = await res.json();
-  if (!data || !data.item) return null;
+  if (!data || !data.item) {
+    lastPlaybackIssue = { kind: 'nothing' };
+    return null;
+  }
+  // Podcasts et publicités n'ont pas d'artistes ni de paroles.
+  if (!Array.isArray(data.item.artists)) {
+    lastPlaybackIssue = { kind: 'unsupported' };
+    return null;
+  }
 
   const latencyCompensationMs = (receivedAt - sentAt) / 2;
 
@@ -1358,7 +1428,7 @@ spotifyNowPlayingBtn.addEventListener('click', async () => {
   try {
     const track = await fetchPlaybackState();
     if (!track) {
-      setStatus("Aucune lecture en cours sur Spotify (ou session expirée).", true);
+      setStatus(playbackIssueMessage(), true);
       return;
     }
     input.value = `${track.artist} ${track.title}`;

@@ -48,6 +48,10 @@ class PstApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
     suspend fun search(query: String, sources: List<String>) =
         get("/api/search", mapOf("q" to query, "sources" to sources.joinToString(",")), SearchResponse.serializer())
 
+    /** [sort] : "popularity" ou "title". */
+    suspend fun artist(id: Long, page: Int, sort: String) =
+        get("/api/artist", mapOf("id" to id.toString(), "page" to page.toString(), "sort" to sort), ArtistResponse.serializer())
+
     suspend fun lyrics(song: Song, sources: List<String>): ApiResult<LyricsResponse> {
         val params = buildMap {
             song.url?.let { put("url", it) }

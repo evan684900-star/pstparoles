@@ -20,6 +20,8 @@ data class Song(
     val source: String,
     /** Spotify renvoie tous les artistes ("A, B") : on garde le principal pour chercher, tout pour afficher. */
     val displayArtist: String? = null,
+    /** Identifiant Genius de l'artiste : rend son nom cliquable vers sa discographie. */
+    val artistId: Long? = null,
 )
 
 @Serializable
@@ -33,12 +35,29 @@ data class SearchResult(
     val lyrics: String? = null,
     /** Résultat LRCLIB d'un morceau sans chant (Genius ne les référence presque pas). */
     val instrumental: Boolean = false,
+    val artistId: Long? = null,
 ) {
-    fun toSong() = Song(artist, title, thumbnail, id, url, source)
+    fun toSong() = Song(artist, title, thumbnail, id, url, source, artistId = artistId)
 }
 
 @Serializable
-data class SearchResponse(val results: List<SearchResult> = emptyList(), val error: String? = null)
+data class ArtistInfo(val id: Long, val name: String = "", val image: String? = null)
+
+@Serializable
+data class SearchResponse(
+    val results: List<SearchResult> = emptyList(),
+    /** Artiste dont le nom figure dans la recherche. */
+    val artist: ArtistInfo? = null,
+    val error: String? = null,
+)
+
+@Serializable
+data class ArtistResponse(
+    val artist: ArtistInfo? = null,
+    val songs: List<SearchResult> = emptyList(),
+    val nextPage: Int? = null,
+    val error: String? = null,
+)
 
 @Serializable
 data class LyricsResponse(

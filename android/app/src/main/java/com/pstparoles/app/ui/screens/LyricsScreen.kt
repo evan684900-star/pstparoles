@@ -78,6 +78,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -86,6 +87,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.pstparoles.app.core.findLineIndexAt
 import com.pstparoles.app.core.formatMs
 import com.pstparoles.app.core.formatOffset
+import com.pstparoles.app.data.ArtistInfo
 import com.pstparoles.app.data.TRANSLATE_LANGUAGES
 import com.pstparoles.app.data.sourceLabel
 import com.pstparoles.app.ui.LyricsContent
@@ -522,13 +524,22 @@ private fun SongHead(vm: MainViewModel) {
             Text(song.title, fontFamily = PstFonts.serif, fontSize = 34.sp, lineHeight = 1.08.em, letterSpacing = (-0.4).sp)
             Spacer(Modifier.height(7.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
+                val artistId = song.artistId
                 Text(
                     song.displayArtist ?: song.artist,
                     color = Pst.muted,
                     fontSize = 14.5.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
+                    // Nom cliquable : ouvre toute la discographie de l'artiste.
+                    textDecoration = if (artistId != null) TextDecoration.Underline else null,
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .then(
+                            if (artistId != null) {
+                                Modifier.clickable { vm.openArtist(ArtistInfo(artistId, song.artist)) }
+                            } else Modifier,
+                        ),
                 )
                 Text(" · ", color = Pst.muted, fontSize = 14.5.sp)
                 Text(sourceLabel(song.source), color = Pst.muted, fontFamily = PstFonts.mono, fontSize = 11.5.sp)

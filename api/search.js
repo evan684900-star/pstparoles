@@ -3,6 +3,19 @@ const { guessLyrics, searchLrclib, normalizeForMatch, cleanQueryText } = require
 
 const GENIUS_ACCESS_TOKEN = process.env.GENIUS_ACCESS_TOKEN;
 
+// Artiste dont le nom figure dans la recherche ("Daft Punk", "daft punk
+// one more time") : le front propose alors d'ouvrir toute sa discographie.
+function findQueriedArtist(query, artists) {
+  const q = ` ${normalizeForMatch(query)} `;
+  let best = null;
+  for (const a of artists) {
+    const name = normalizeForMatch(a.name);
+    if (name.length < 2 || !q.includes(` ${name} `)) continue;
+    if (!best || name.length > normalizeForMatch(best.name).length) best = a;
+  }
+  return best ? { id: best.id, name: best.name, image: best.image_url || null } : null;
+}
+
 module.exports = async (req, res) => {
   const query = (req.query.q || '').trim();
   if (!query) {
@@ -10,6 +23,7 @@ module.exports = async (req, res) => {
   }
 
   let geniusHits = [];
+  let geniusArtists = [];
   let geniusError = null;
 
   const enabledKeys = req.query.sources ? req.query.sources.split(',').filter(Boolean) : null;
@@ -24,17 +38,17 @@ module.exports = async (req, res) => {
         headers: { Authorization: `Bearer ${GENIUS_ACCESS_TOKEN}` },
       });
 
-      geniusHits = response.data.response.hits.map((hit) => {
-        const song = hit.result;
-        return {
-          source: 'genius',
-          id: song.id,
-          title: song.title,
-          artist: song.primary_artist.name,
-          thumbnail: song.song_art_image_thumbnail_url,
-          url: song.url,
-        };
-      });
+      const songs = response.data.response.hits.map((hit) => hit.result);
+      geniusArtists = songs.map((song) => song.primary_artist).filter(Boolean);
+      geniusHits = songs.map((song) => ({
+        source: 'genius',
+        id: song.id,
+        title: song.title,
+        artist: song.primary_artist.name,
+        artistId: song.primary_artist.id,
+        thumbnail: song.song_art_image_thumbnail_url,
+        url: song.url,
+      }));
     } catch (err) {
       console.error('Erreur recherche Genius:', err.message);
       geniusError = 'Impossible de contacter Genius pour la recherche.';
@@ -42,6 +56,7 @@ module.exports = async (req, res) => {
   }
 
   const lrclibHits = await lrclibPromise;
+  const artist = findQueriedArtist(query, geniusArtists);
   const keyOf = (r) => `${normalizeForMatch(cleanQueryText(r.title))}|${normalizeForMatch(r.artist)}`;
 
   if (geniusHits.length > 0) {
@@ -66,6 +81,7 @@ module.exports = async (req, res) => {
     };
     return res.status(200).json({
       results: [...extras.filter(matchesQuery), ...geniusHits, ...extras.filter((h) => !matchesQuery(h))],
+      artist,
     });
   }
 

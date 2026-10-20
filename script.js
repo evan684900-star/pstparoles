@@ -429,7 +429,7 @@ async function runSearch(query) {
 
     lastResults = data.results;
     setStatus(data.results.length + ' résultats');
-    renderResults(data.results);
+    renderResults(data.results, data.artist);
   } catch (err) {
     skeletons.hidden = true;
     setStatus('Erreur réseau, réessaie.', true);
@@ -438,24 +438,164 @@ async function runSearch(query) {
 
 form.addEventListener('submit', (e) => { e.preventDefault(); runSearch(input.value); });
 
-function renderResults(results) {
+function songItem(song, i) {
+  const li = document.createElement('li');
+  li.style.animationDelay = Math.min(i, 12) * 70 + 'ms';
+  li.innerHTML = `
+    ${coverMarkup(song, false)}
+    <div class="info">
+      <strong>${escapeHtml(song.title)}</strong>
+      <span>${escapeHtml(song.artist)}</span>
+    </div>
+    ${song.instrumental ? '<span class="tag-instrumental">Instrumental</span>' : ''}
+    <span class="source">${escapeHtml(SOURCE_LABELS[song.source] || song.source)}</span>
+    <span class="arrow">→</span>
+  `;
+  li.addEventListener('click', () => loadLyrics(song));
+  return li;
+}
+
+function artistPhotoMarkup(artist) {
+  const tint = hueOf(artist.name);
+  const inner = artist.image
+    ? `<img src="${escapeHtml(artist.image)}" alt="" loading="lazy" />`
+    : `<span>${escapeHtml(initials(artist.name))}</span>`;
+  return `<div class="artist-photo" style="background:linear-gradient(140deg,${tint},#0a0a0c)">${inner}</div>`;
+}
+
+// Résultats de la dernière recherche, pour y revenir depuis une page artiste.
+let lastSearch = null;
+
+function renderResults(results, artist) {
+  lastSearch = { results, artist: artist || null };
   resultsEl.innerHTML = '';
-  results.forEach((song, i) => {
+  if (artist) {
     const li = document.createElement('li');
-    li.style.animationDelay = (i * 70) + 'ms';
+    li.className = 'artist-card';
     li.innerHTML = `
-      ${coverMarkup(song, false)}
+      ${artistPhotoMarkup(artist)}
       <div class="info">
-        <strong>${escapeHtml(song.title)}</strong>
-        <span>${escapeHtml(song.artist)}</span>
+        <em class="eyebrow">Artiste</em>
+        <strong>${escapeHtml(artist.name)}</strong>
+        <span>Voir toutes ses musiques</span>
       </div>
-      ${song.instrumental ? '<span class="tag-instrumental">Instrumental</span>' : ''}
-      <span class="source">${escapeHtml(SOURCE_LABELS[song.source] || song.source)}</span>
       <span class="arrow">→</span>
     `;
-    li.addEventListener('click', () => loadLyrics(song));
+    li.addEventListener('click', () => openArtist(artist));
     resultsEl.appendChild(li);
-  });
+  }
+  results.forEach((song, i) => resultsEl.appendChild(songItem(song, artist ? i + 1 : i)));
+}
+
+/* ---------- page artiste ---------- */
+
+let artistToken = 0;
+
+async function openArtist(artist, sort = 'popularity') {
+  const token = ++artistToken;
+  showResults();
+  resultsEl.innerHTML = '';
+  lastResults = [];
+  emptyEl.hidden = true;
+  recentsEl.hidden = true;
+  skeletons.hidden = false;
+  setStatus('');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  let page = 1;
+  let songs = [];
+  let head = null;
+  let more = null;
+
+  async function loadPage() {
+    const res = await fetch(`/api/artist?id=${encodeURIComponent(artist.id)}&page=${page}&sort=${sort}`);
+    const data = await res.json();
+    if (token !== artistToken) return null;
+    if (!res.ok) throw new Error(data.error || 'Erreur inconnue.');
+    if (data.artist) artist = { ...artist, ...data.artist };
+    return data;
+  }
+
+  function updateCount(hasMore) {
+    head.querySelector('.artist-count').textContent =
+      songs.length + (hasMore ? '+' : '') + (songs.length > 1 ? ' morceaux' : ' morceau');
+    setStatus(songs.length + (hasMore ? '+' : '') + ' résultats');
+  }
+
+  function appendSongs(list, hasMore) {
+    const start = songs.length;
+    songs = songs.concat(list);
+    lastResults = songs;
+    list.forEach((song, i) => resultsEl.insertBefore(songItem(song, i), more));
+    updateCount(hasMore);
+    more.hidden = !hasMore;
+    if (start === 0 && !list.length) setStatus('Aucun morceau trouvé pour cet artiste.', true);
+  }
+
+  try {
+    const data = await loadPage();
+    if (!data) return;
+    skeletons.hidden = true;
+
+    head = document.createElement('li');
+    head.className = 'artist-head';
+    head.innerHTML = `
+      ${lastSearch ? '<button type="button" class="artist-back">← Résultats</button>' : ''}
+      <div class="artist-id">
+        ${artistPhotoMarkup(artist)}
+        <div class="info">
+          <em class="eyebrow">Artiste</em>
+          <strong>${escapeHtml(artist.name)}</strong>
+          <span class="artist-count"></span>
+        </div>
+      </div>
+      <div class="artist-sort" role="group" aria-label="Trier">
+        <button type="button" data-sort="popularity" aria-pressed="${sort === 'popularity'}">Populaires</button>
+        <button type="button" data-sort="title" aria-pressed="${sort === 'title'}">A → Z</button>
+      </div>
+    `;
+    const back = head.querySelector('.artist-back');
+    if (back) back.addEventListener('click', () => {
+      artistToken++;
+      const prev = lastSearch;
+      renderResults(prev.results, prev.artist);
+      lastResults = prev.results;
+      showResults();
+    });
+    head.querySelectorAll('[data-sort]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.sort !== sort) openArtist(artist, btn.dataset.sort);
+      });
+    });
+    resultsEl.appendChild(head);
+
+    more = document.createElement('li');
+    more.className = 'artist-more';
+    more.innerHTML = '<button type="button">Voir plus</button>';
+    const moreBtn = more.querySelector('button');
+    moreBtn.addEventListener('click', async () => {
+      moreBtn.disabled = true;
+      moreBtn.textContent = 'Chargement…';
+      try {
+        page++;
+        const next = await loadPage();
+        if (!next) return;
+        appendSongs(next.songs, !!next.nextPage);
+      } catch (err) {
+        page--;
+        setStatus(err.message || 'Erreur réseau, réessaie.', true);
+      }
+      moreBtn.disabled = false;
+      moreBtn.textContent = 'Voir plus';
+    });
+    resultsEl.appendChild(more);
+
+    appendSongs(data.songs, !!data.nextPage);
+  } catch (err) {
+    if (token !== artistToken) return;
+    skeletons.hidden = true;
+    setStatus(err.message || 'Erreur réseau, réessaie.', true);
+  }
 }
 
 /* ---------- paroles ---------- */
@@ -644,7 +784,12 @@ async function loadLyrics(song) {
   currentSong = { artist: song.artist, title: song.title, thumbnail: song.thumbnail || null, id: song.id || null };
 
   lyricsTitle.textContent = song.title;
-  lyricsArtist.innerHTML = `${escapeHtml(song.artist)} · <em>${escapeHtml(SOURCE_LABELS[song.source] || song.source)}</em>`;
+  const artistName = song.artistId
+    ? `<button type="button" class="artist-link">${escapeHtml(song.artist)}</button>`
+    : escapeHtml(song.artist);
+  lyricsArtist.innerHTML = `${artistName} · <em>${escapeHtml(SOURCE_LABELS[song.source] || song.source)}</em>`;
+  const artistLink = lyricsArtist.querySelector('.artist-link');
+  if (artistLink) artistLink.addEventListener('click', () => openArtist({ id: song.artistId, name: song.artist, image: null }));
   setCover(lyricsCover, song);
   replayVinyl();
   setHalo(hueOf(song.title + song.artist));

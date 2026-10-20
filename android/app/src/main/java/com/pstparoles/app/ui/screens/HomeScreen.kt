@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -47,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
@@ -59,10 +61,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.pstparoles.app.data.ArtistInfo
 import com.pstparoles.app.data.SearchResult
 import com.pstparoles.app.data.sourceLabel
+import com.pstparoles.app.ui.ArtistPage
 import com.pstparoles.app.ui.MainViewModel
 import com.pstparoles.app.ui.components.CoverArt
 import com.pstparoles.app.ui.components.Header
@@ -107,10 +112,20 @@ fun HomeScreen(vm: MainViewModel) {
             if (vm.searching) {
                 item(key = "loading") { SearchingSkeleton() }
             }
-            itemsIndexed(vm.results, key = { i, r -> "r$i-${r.id}-${r.title}" }) { i, result ->
-                ResultRow(result, Modifier.rise(i * 70, vm.results)) { vm.openResult(result) }
+            val artistPage = vm.artistPage
+            if (artistPage != null) {
+                artistItems(vm, artistPage)
+            } else {
+                vm.searchArtist?.let { artist ->
+                    item(key = "artist-card") {
+                        ArtistCard(artist, Modifier.rise(0, vm.results)) { vm.openArtist(artist) }
+                    }
+                }
+                itemsIndexed(vm.results, key = { i, r -> "r$i-${r.id}-${r.title}" }) { i, result ->
+                    ResultRow(result, Modifier.rise(i * 70, vm.results)) { vm.openResult(result) }
+                }
             }
-            if (!vm.searching && vm.results.isEmpty() && vm.homeStatus == null) {
+            if (artistPage == null && !vm.searching && vm.results.isEmpty() && vm.homeStatus == null) {
                 item(key = "empty") { EmptyState() }
             }
             item(key = "footer") {
@@ -297,6 +312,118 @@ private fun ResultRow(result: SearchResult, modifier: Modifier, onClick: () -> U
         Spacer(Modifier.width(10.dp))
         Text("→", color = Pst.faint, fontSize = 16.sp)
     }
+}
+
+@Composable
+private fun ArtistPhoto(artist: ArtistInfo, side: Dp) {
+    // Même rendu que les pochettes (initiales sur dégradé sans photo), en rond.
+    CoverArt(artist.name, "", artist.image, side, side / 2)
+}
+
+@Composable
+private fun ArtistCard(artist: ArtistInfo, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        modifier
+            .padding(top = 10.dp)
+            .fillMaxWidth()
+            .clip(shape)
+            .border(1.dp, Pst.accent.copy(alpha = 0.28f), shape)
+            .background(Brush.horizontalGradient(listOf(Pst.accent.copy(alpha = 0.09f), Pst.surface)))
+            .clickable(onClick = onClick)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ArtistPhoto(artist, 56.dp)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text("ARTISTE", fontFamily = PstFonts.mono, fontSize = 10.sp, color = Pst.accent, letterSpacing = 1.sp)
+            Text(artist.name, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Voir toutes ses musiques", color = Pst.accent.copy(alpha = 0.85f), fontSize = 13.sp)
+        }
+        Text("→", color = Pst.faint, fontSize = 16.sp)
+    }
+}
+
+private fun LazyListScope.artistItems(vm: MainViewModel, page: ArtistPage) {
+    item(key = "artist-head") {
+        Column(Modifier.padding(top = 16.dp)) {
+            Text(
+                "← Résultats",
+                color = Pst.muted,
+                fontSize = 13.sp,
+                modifier = Modifier.clickable { vm.closeArtist() }.padding(vertical = 4.dp),
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ArtistPhoto(page.artist, 84.dp)
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("ARTISTE", fontFamily = PstFonts.mono, fontSize = 10.sp, color = Pst.accent, letterSpacing = 1.sp)
+                    Text(page.artist.name, fontFamily = PstFonts.serif, fontSize = 34.sp, lineHeight = 36.sp)
+                    if (page.songs.isNotEmpty()) {
+                        val n = page.songs.size
+                        Text(
+                            "$n${if (page.nextPage != null) "+" else ""} morceau${if (n > 1) "x" else ""}",
+                            color = Pst.muted,
+                            fontSize = 13.sp,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SortChip("Populaires", page.sort == "popularity") { vm.openArtist(page.artist, "popularity") }
+                SortChip("A → Z", page.sort == "title") { vm.openArtist(page.artist, "title") }
+            }
+            page.error?.let {
+                Text(it, color = Color(0xFFFF8A80), fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
+            }
+        }
+    }
+    if (page.loading && page.songs.isEmpty()) {
+        item(key = "artist-loading") { SearchingSkeleton() }
+    }
+    itemsIndexed(page.songs, key = { i, r -> "a$i-${r.id}" }) { i, result ->
+        ResultRow(result, Modifier.rise(minOf(i, 12) * 70, page.sort)) { vm.openResult(result) }
+    }
+    if (page.nextPage != null && page.songs.isNotEmpty()) {
+        item(key = "artist-more") {
+            Box(Modifier.fillMaxWidth().padding(top = 16.dp), contentAlignment = Alignment.Center) {
+                Text(
+                    if (page.loading) "Chargement…" else "Voir plus",
+                    fontSize = 14.sp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .border(1.dp, Pst.line, RoundedCornerShape(999.dp))
+                        .background(Pst.surface)
+                        .clickable(enabled = !page.loading) { vm.loadMoreArtist() }
+                        .padding(horizontal = 22.dp, vertical = 10.dp),
+                )
+            }
+        }
+    }
+    if (!page.loading && page.error == null && page.songs.isEmpty()) {
+        item(key = "artist-empty") {
+            Text("Aucun morceau trouvé pour cet artiste.", color = Pst.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 16.dp))
+        }
+    }
+}
+
+@Composable
+private fun SortChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(999.dp)
+    Text(
+        label,
+        fontSize = 13.sp,
+        color = if (selected) Pst.onAccent else Pst.muted,
+        modifier = Modifier
+            .clip(shape)
+            .border(1.dp, if (selected) Pst.accent else Pst.line, shape)
+            .background(if (selected) Pst.accent else Pst.surface)
+            .clickable(enabled = !selected, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+    )
 }
 
 @Composable

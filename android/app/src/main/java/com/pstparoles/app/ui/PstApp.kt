@@ -52,6 +52,7 @@ fun PstApp(vm: MainViewModel, onConnectSpotify: () -> Unit) {
 
     // Retour arrière : on ferme la couche la plus haute d'abord. Le dernier
     // BackHandler déclaré est prioritaire.
+    BackHandler(enabled = vm.screen == Screen.Home && vm.artistPage != null) { vm.closeArtist() }
     BackHandler(enabled = vm.screen == Screen.Lyrics) { vm.showResults() }
     BackHandler(enabled = vm.concert) { vm.concert = false }
     BackHandler(enabled = vm.picking) { vm.stopPicking() }

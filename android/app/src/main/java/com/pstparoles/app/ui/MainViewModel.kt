@@ -17,6 +17,7 @@ import com.pstparoles.app.core.parseYoutubeTitle
 import com.pstparoles.app.core.tracksMatch
 import com.pstparoles.app.core.translationCacheKey
 import com.pstparoles.app.data.ALL_SOURCE_KEYS
+import com.pstparoles.app.data.ArtistInfo
 import com.pstparoles.app.data.CachedTranslation
 import com.pstparoles.app.data.LibraryItem
 import com.pstparoles.app.data.LyricsResponse
@@ -37,6 +38,15 @@ import java.util.Locale
 enum class Screen { Home, Lyrics }
 
 /** Ce qu'affiche la zone des paroles. */
+data class ArtistPage(
+    val artist: ArtistInfo,
+    val songs: List<SearchResult> = emptyList(),
+    val sort: String = "popularity",
+    val nextPage: Int? = null,
+    val loading: Boolean = false,
+    val error: String? = null,
+)
+
 sealed interface LyricsContent {
     data object None : LyricsContent
     data class Loading(val message: String = "Chargement des paroles…") : LyricsContent
@@ -76,6 +86,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var homeStatus by mutableStateOf<Pair<String, Boolean>?>(null) // texte, est une erreur
         private set
+    /** Artiste reconnu dans la dernière recherche. */
+    var searchArtist by mutableStateOf<ArtistInfo?>(null)
+        private set
+    /** Discographie affichée à la place des résultats, null sinon. */
+    var artistPage by mutableStateOf<ArtistPage?>(null)
+        private set
     var recents by mutableStateOf(prefs.recents)
         private set
     /** Incrémenté à chaque déclenchement de l'easter egg "karaoke". */
@@ -110,6 +126,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             results = emptyList()
+            searchArtist = null
+            artistPage = null
             homeStatus = null
             searching = true
             val res = api.search(q, enabledSources)
@@ -121,9 +139,51 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 body == null || body.results.isEmpty() -> homeStatus = "Aucun résultat trouvé." to true
                 else -> {
                     results = body.results
+                    searchArtist = body.artist
                     homeStatus = "${body.results.size} résultats" to false
                 }
             }
+        }
+    }
+
+    // ===================== page artiste =====================
+
+    private var artistJob: Job? = null
+
+    fun openArtist(artist: ArtistInfo, sort: String = "popularity") {
+        showResults()
+        artistJob?.cancel()
+        artistPage = ArtistPage(artist, sort = sort, loading = true)
+        artistJob = viewModelScope.launch { loadArtistPage(1) }
+    }
+
+    fun loadMoreArtist() {
+        val page = artistPage ?: return
+        if (page.loading || page.nextPage == null) return
+        artistPage = page.copy(loading = true)
+        artistJob = viewModelScope.launch { loadArtistPage(page.nextPage) }
+    }
+
+    /** Retour aux résultats de la recherche. */
+    fun closeArtist() {
+        artistJob?.cancel()
+        artistPage = null
+    }
+
+    private suspend fun loadArtistPage(number: Int) {
+        val current = artistPage ?: return
+        val res = api.artist(current.artist.id, number, current.sort)
+        val body = res.body
+        artistPage = when {
+            res.networkError -> current.copy(loading = false, error = "Erreur réseau, réessaie.")
+            !res.ok || body == null -> current.copy(loading = false, error = body?.error ?: "Erreur inconnue.")
+            else -> current.copy(
+                artist = body.artist ?: current.artist,
+                songs = current.songs + body.songs,
+                nextPage = body.nextPage,
+                loading = false,
+                error = null,
+            )
         }
     }
 
@@ -273,6 +333,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun goHome() {
         query = ""
         results = emptyList()
+        searchArtist = null
+        closeArtist()
         homeStatus = null
         showResults()
     }

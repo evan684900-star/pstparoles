@@ -67,6 +67,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -90,7 +92,6 @@ import com.pstparoles.app.ui.LyricsContent
 import com.pstparoles.app.ui.MainViewModel
 import com.pstparoles.app.ui.SyncBarState
 import com.pstparoles.app.ui.components.CoverStack
-import com.pstparoles.app.ui.components.EqBars
 import com.pstparoles.app.ui.components.Header
 import com.pstparoles.app.ui.components.PstIcons
 import com.pstparoles.app.ui.components.ToolButton
@@ -367,6 +368,64 @@ private fun LyricLine(
     }
 }
 
+private val SPARK_COLOR = Color(0xFFFFE2A8)
+
+/**
+ * Filament musical : trois fils dorés qui ondulent en décalé, avec une lueur
+ * et quelques étincelles. Les vitesses sont des multiples entiers de la
+ * phase, donc la boucle de 2π ne fait jamais de saut.
+ */
+@Composable
+private fun MusicFilament(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "filament")
+    val phase by transition.animateFloat(
+        0f,
+        (2 * Math.PI).toFloat(),
+        infiniteRepeatable(tween(3200, easing = androidx.compose.animation.core.LinearEasing)),
+        label = "phase",
+    )
+
+    androidx.compose.foundation.Canvas(modifier.fillMaxWidth(0.72f).height(60.dp)) {
+        val w = size.width
+        val mid = size.height / 2f
+        val fade = Brush.horizontalGradient(
+            0f to Color.Transparent,
+            0.2f to Pst.accent,
+            0.8f to Pst.accent,
+            1f to Color.Transparent,
+        )
+        // amplitude, longueur d'onde (part de la largeur), épaisseur, opacité, vitesse
+        val strands = listOf(
+            listOf(9f, 0.34f, 2.2f, 1f, 1f),
+            listOf(6f, 0.25f, 1.4f, 0.6f, 2f),
+            listOf(12f, 0.5f, 1f, 0.4f, -1f),
+        )
+        for ((amp, wave, width, alpha, speed) in strands) {
+            val path = androidx.compose.ui.graphics.Path()
+            var x = 0f
+            while (x <= w) {
+                val y = mid + amp.dp.toPx() * kotlin.math.sin(2f * Math.PI.toFloat() * x / (w * wave) + phase * speed)
+                if (x == 0f) path.moveTo(x, y) else path.lineTo(x, y)
+                x += 3f
+            }
+            // lueur, puis le fil lui-même
+            drawPath(path, fade, alpha = alpha * 0.3f, style = Stroke(width.dp.toPx() * 4f, cap = StrokeCap.Round))
+            drawPath(path, fade, alpha = alpha, style = Stroke(width.dp.toPx(), cap = StrokeCap.Round))
+        }
+
+        val sparks = listOf(0.16f to 0.3f, 0.38f to 0.73f, 0.62f to 0.23f, 0.82f to 0.67f, 0.27f to 0.67f, 0.72f to 0.43f)
+        sparks.forEachIndexed { i, (fx, fy) ->
+            val s = (kotlin.math.sin(phase + i * 1.05f) + 1f) / 2f
+            val a = s * s
+            drawCircle(
+                SPARK_COLOR.copy(alpha = a),
+                radius = (if (i % 2 == 0) 1.6f else 1.1f).dp.toPx() * (0.4f + 0.6f * a),
+                center = androidx.compose.ui.geometry.Offset(w * fx, size.height * fy - a * 6.dp.toPx()),
+            )
+        }
+    }
+}
+
 @Composable
 private fun InstrumentalBlock(textSizeSp: Float) {
     Column(
@@ -385,12 +444,12 @@ private fun InstrumentalBlock(textSizeSp: Float) {
             .padding(horizontal = 16.dp, vertical = 34.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        EqBars(Modifier.height(30.dp))
+        MusicFilament()
         Spacer(Modifier.height(14.dp))
         Text("Morceau instrumental", fontFamily = PstFonts.serif, fontSize = (textSizeSp * 1.35f).sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(6.dp))
         Text(
-            "Pas de paroles sur celui-ci : profite de la musique.",
+            "Pas de paroles ici, laisse juste la musique se jouer…",
             color = Pst.muted,
             fontSize = 14.sp,
             textAlign = TextAlign.Center,

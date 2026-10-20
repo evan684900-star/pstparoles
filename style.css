@@ -998,8 +998,31 @@ body.concert .lyr-tr { font-size: .5em; }
   border-radius: 18px;
   animation: rise .5s cubic-bezier(.2,.8,.2,1) both;
 }
-.instrumental .eq { height: 30px; gap: 4px; margin-bottom: 14px; }
-.instrumental .eq i { width: 4px; }
+.filament {
+  width: min(240px, 72%);
+  height: auto;
+  margin-bottom: 14px;
+  overflow: visible;
+}
+.filament-strand {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  animation: filamentFlow 3s linear infinite;
+}
+.filament-spark {
+  fill: #ffe2a8;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: filamentSpark 3.2s ease-in-out infinite;
+}
+@keyframes filamentFlow { from { transform: translateX(0) } to { transform: translateX(calc(-1 * var(--period))) } }
+@keyframes filamentSpark {
+  0%, 100% { opacity: 0; transform: translateY(4px) scale(.4) }
+  40% { opacity: 1; transform: translateY(-2px) scale(1) }
+  70% { opacity: .2; transform: translateY(-7px) scale(.6) }
+}
 #lyrics-content .instrumental p { animation: none; }
 #lyrics-content .instrumental-title {
   margin: 0;

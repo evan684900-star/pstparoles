@@ -512,14 +512,59 @@ function restoreOriginalLyrics() {
 // Morceau sans chant : les sources le signalent explicitement.
 let currentInstrumental = false;
 
+// Onde sinusoïdale faite de demi-arches (Q puis T répétés) : chaque "T"
+// prolonge la courbe en miroir, ce qui donne une vague parfaitement lisse.
+function wavePath(amplitude, period, length, mid) {
+  let d = `M0 ${mid} Q${period / 4} ${mid - amplitude} ${period / 2} ${mid}`;
+  for (let x = period; x <= length; x += period / 2) d += ` T${x} ${mid}`;
+  return d;
+}
+
+// Filament musical : trois fils dorés qui ondulent en décalé, avec une
+// lueur et quelques étincelles. Les vagues sont deux fois plus longues que
+// le cadre et glissent d'une période exacte : la boucle ne saute jamais.
+function musicFilamentSvg() {
+  const strands = [
+    { a: 9, p: 80, w: 2.2, o: 1, dur: 3.2 },
+    { a: 6, p: 60, w: 1.4, o: 0.6, dur: 2.4 },
+    { a: 12, p: 120, w: 1, o: 0.4, dur: 4.6 },
+  ];
+  const sparkles = [[38, 18], [92, 44], [150, 14], [196, 40], [66, 40], [172, 26]];
+  return `
+    <svg class="filament" viewBox="0 0 240 60" aria-hidden="true">
+      <defs>
+        <linearGradient id="filament-fade" x1="0" x2="1">
+          <stop offset="0" stop-color="#fff" stop-opacity="0" />
+          <stop offset=".2" stop-color="#fff" stop-opacity="1" />
+          <stop offset=".8" stop-color="#fff" stop-opacity="1" />
+          <stop offset="1" stop-color="#fff" stop-opacity="0" />
+        </linearGradient>
+        <mask id="filament-mask"><rect width="240" height="60" fill="url(#filament-fade)" /></mask>
+        <filter id="filament-glow" x="-20%" y="-60%" width="140%" height="220%">
+          <feGaussianBlur stdDeviation="2.6" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+      <g mask="url(#filament-mask)" filter="url(#filament-glow)">
+        ${strands.map((st, i) => `
+          <path class="filament-strand" d="${wavePath(st.a, st.p, 240 + st.p * 2, 30)}"
+            stroke-width="${st.w}" opacity="${st.o}"
+            style="--period:${st.p}px;animation-duration:${st.dur}s;animation-delay:-${i * 0.7}s" />`).join('')}
+      </g>
+      ${sparkles.map(([x, y], i) => `
+        <circle class="filament-spark" cx="${x}" cy="${y}" r="${i % 2 ? 1.1 : 1.6}"
+          style="animation-delay:${(i * 0.53).toFixed(2)}s" />`).join('')}
+    </svg>`;
+}
+
 function showInstrumental() {
   renderLyrics('');
   currentInstrumental = true;
   lyricsContent.innerHTML = `
     <div class="instrumental">
-      <div class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      ${musicFilamentSvg()}
       <p class="instrumental-title">Morceau instrumental</p>
-      <p class="instrumental-sub">Pas de paroles sur celui-ci : profite de la musique.</p>
+      <p class="instrumental-sub">Pas de paroles ici, laisse juste la musique se jouer…</p>
     </div>`;
   updateSyncBar();
 }

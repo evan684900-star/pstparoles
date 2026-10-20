@@ -44,6 +44,7 @@ sealed interface LyricsContent {
     /** [translations] : une traduction par ligne horodatée (affichage bilingue), ou null. */
     data class Synced(val lines: List<LrcLine>, val translations: List<String>? = null) : LyricsContent
     data class Embed(val html: String, val geniusUrl: String?) : LyricsContent
+    data object Instrumental : LyricsContent
     data class Message(val text: String, val geniusUrl: String? = null) : LyricsContent
 }
 
@@ -219,6 +220,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 res.networkError -> lyrics = LyricsContent.Message("Erreur réseau, réessaie.")
                 !res.ok || body == null -> lyrics = LyricsContent.Message(body?.error ?: "Erreur lors du chargement des paroles.")
                 body.lyrics != null -> applyPayload(body)
+                body.instrumental -> lyrics = LyricsContent.Instrumental
                 body.embedHtml != null -> lyrics = LyricsContent.Embed(body.embedHtml, body.geniusUrl)
                 else -> lyrics = LyricsContent.Message(
                     "Les paroles de cette chanson ne sont pas disponibles pour le moment.",
@@ -519,6 +521,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     applyPayload(body)
                     lyrics
                 }
+                body?.instrumental == true -> LyricsContent.Instrumental
                 else -> LyricsContent.Message("Paroles introuvables pour cette chanson.")
             }
         }

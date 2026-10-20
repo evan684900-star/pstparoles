@@ -7,18 +7,19 @@ const GENIUS_ACCESS_TOKEN = process.env.GENIUS_ACCESS_TOKEN;
 // d'intégration officiel (embed_content) : il se charge dans le navigateur
 // du visiteur, pas depuis notre serveur, donc il passe leur protection
 // anti-bot sans contourner quoi que ce soit — c'est fait pour être embarqué.
-async function fetchGeniusEmbed(songId) {
-  if (!songId || !GENIUS_ACCESS_TOKEN) return null;
+// Renvoie aussi le marquage "instrumental" de Genius, quand il existe.
+async function fetchGeniusSong(songId) {
+  if (!songId || !GENIUS_ACCESS_TOKEN) return {};
 
   try {
     const res = await axios.get(`https://api.genius.com/songs/${songId}`, {
       headers: { Authorization: `Bearer ${GENIUS_ACCESS_TOKEN}` },
       timeout: 6000,
     });
-    const embedHtml = res.data && res.data.response && res.data.response.song && res.data.response.song.embed_content;
-    return embedHtml || null;
+    const song = (res.data && res.data.response && res.data.response.song) || {};
+    return { embedHtml: song.embed_content || null, instrumental: song.instrumental === true };
   } catch (err) {
-    return null;
+    return {};
   }
 }
 
@@ -46,6 +47,10 @@ module.exports = async (req, res) => {
 
   res.setHeader('Cache-Control', 'no-store');
 
+  if (result && result.instrumental) {
+    return res.status(200).json({ lyrics: null, instrumental: true, source: result.source });
+  }
+
   if (result) {
     return res.status(200).json({
       lyrics: result.lyrics,
@@ -58,11 +63,14 @@ module.exports = async (req, res) => {
 
   // Aucune source texte n'a trouvé la chanson : on propose le widget Genius
   // officiel si on a l'id de la chanson (résultat issu de la recherche Genius).
-  const embedHtml = await fetchGeniusEmbed(id);
+  const genius = await fetchGeniusSong(id);
+  if (genius.instrumental) {
+    return res.status(200).json({ lyrics: null, instrumental: true, source: 'genius' });
+  }
 
   return res.status(200).json({
     lyrics: null,
-    embedHtml,
+    embedHtml: genius.embedHtml || null,
     geniusUrl: url && url.startsWith('https://genius.com/') ? url : null,
   });
 };

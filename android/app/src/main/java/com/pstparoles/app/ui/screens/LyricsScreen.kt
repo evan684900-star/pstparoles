@@ -90,6 +90,7 @@ import com.pstparoles.app.ui.LyricsContent
 import com.pstparoles.app.ui.MainViewModel
 import com.pstparoles.app.ui.SyncBarState
 import com.pstparoles.app.ui.components.CoverStack
+import com.pstparoles.app.ui.components.EqBars
 import com.pstparoles.app.ui.components.Header
 import com.pstparoles.app.ui.components.PstIcons
 import com.pstparoles.app.ui.components.ToolButton
@@ -245,6 +246,8 @@ private fun LazyListScope.lyricsItems(vm: MainViewModel, activeIndex: Int, textS
             }
         }
 
+        LyricsContent.Instrumental -> item(key = "instrumental") { InstrumentalBlock(textSizeSp) }
+
         is LyricsContent.Embed -> item(key = "embed") {
             Column {
                 Text("Paroles via le widget officiel Genius :", color = Pst.muted, fontSize = 13.sp)
@@ -361,6 +364,37 @@ private fun LyricLine(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+    }
+}
+
+@Composable
+private fun InstrumentalBlock(textSizeSp: Float) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                drawRoundRect(
+                    color = Color.White.copy(alpha = 0.1f),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 1.dp.toPx(),
+                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 8f)),
+                    ),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(18.dp.toPx()),
+                )
+            }
+            .padding(horizontal = 16.dp, vertical = 34.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        EqBars(Modifier.height(30.dp))
+        Spacer(Modifier.height(14.dp))
+        Text("Morceau instrumental", fontFamily = PstFonts.serif, fontSize = (textSizeSp * 1.35f).sp, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Pas de paroles sur celui-ci : profite de la musique.",
+            color = Pst.muted,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -708,7 +742,11 @@ private fun SyncBar(vm: MainViewModel, state: SyncBarState) {
             when (state) {
                 SyncBarState.Synced -> "Synchronisé avec Spotify"
                 SyncBarState.Paused -> "Lecture en pause"
-                else -> "Pas de paroles synchronisées pour cette chanson"
+                else -> if (vm.lyrics == LyricsContent.Instrumental) {
+                    "Morceau instrumental : pas de paroles à suivre"
+                } else {
+                    "Pas de paroles synchronisées pour cette chanson"
+                }
             },
             color = if (neutral) Pst.muted else Pst.spotify,
             fontSize = 12.5.sp,

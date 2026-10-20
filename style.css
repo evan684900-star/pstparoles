@@ -986,6 +986,36 @@ body.concert .lyr-tr { font-size: .5em; }
   opacity: .8;
 }
 
+/* ---------- morceau instrumental ---------- */
+
+.instrumental {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 34px 16px;
+  border: 1px dashed rgba(255,255,255,.1);
+  border-radius: 18px;
+  animation: rise .5s cubic-bezier(.2,.8,.2,1) both;
+}
+.instrumental .eq { height: 30px; gap: 4px; margin-bottom: 14px; }
+.instrumental .eq i { width: 4px; }
+#lyrics-content .instrumental p { animation: none; }
+#lyrics-content .instrumental-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: calc(var(--lyr-size) * 1.35);
+  line-height: 1.3;
+  color: var(--text);
+}
+#lyrics-content .instrumental-sub {
+  margin: 6px 0 0;
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 /* ---------- mention sur les droits (bas de l'accueil) ---------- */
 
 .legal {

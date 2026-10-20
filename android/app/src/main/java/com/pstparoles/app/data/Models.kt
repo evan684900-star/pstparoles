@@ -45,6 +45,8 @@ data class LyricsResponse(
     val source: String? = null,
     val embedHtml: String? = null,
     val geniusUrl: String? = null,
+    /** Morceau sans chant, signalé par LRCLIB ou Genius. */
+    val instrumental: Boolean = false,
     val error: String? = null,
 )
 

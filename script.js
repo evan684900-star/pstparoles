@@ -509,7 +509,23 @@ function restoreOriginalLyrics() {
   else renderLyrics(originalLyricsText);
 }
 
+// Morceau sans chant : les sources le signalent explicitement.
+let currentInstrumental = false;
+
+function showInstrumental() {
+  renderLyrics('');
+  currentInstrumental = true;
+  lyricsContent.innerHTML = `
+    <div class="instrumental">
+      <div class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <p class="instrumental-title">Morceau instrumental</p>
+      <p class="instrumental-sub">Pas de paroles sur celui-ci : profite de la musique.</p>
+    </div>`;
+  updateSyncBar();
+}
+
 function hideLyricsExtras() {
+  currentInstrumental = false;
   translateControl.classList.add('hidden');
   saveButton.classList.add('hidden');
   cardButton.classList.add('hidden');
@@ -608,6 +624,11 @@ async function loadLyrics(song) {
 
     if (data.lyrics) {
       applyLyricsPayload(data);
+      return;
+    }
+
+    if (data.instrumental) {
+      showInstrumental();
       return;
     }
 
@@ -1672,7 +1693,9 @@ function updateSyncBar() {
     syncBar.classList.add('unavailable');
     lyricsContent.classList.remove('synced');
     clearKaraokeClasses();
-    syncStatus.textContent = 'Pas de paroles synchronisées pour cette chanson';
+    syncStatus.textContent = currentInstrumental
+      ? 'Morceau instrumental : pas de paroles à suivre'
+      : 'Pas de paroles synchronisées pour cette chanson';
     return;
   }
 
@@ -1822,6 +1845,8 @@ async function followPlayingTrack(state) {
 
     if (data.lyrics) {
       applyLyricsPayload(data);
+    } else if (data.instrumental) {
+      showInstrumental();
     } else {
       renderLyrics("Paroles introuvables pour cette chanson.");
     }

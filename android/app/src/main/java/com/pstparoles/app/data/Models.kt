@@ -31,6 +31,8 @@ data class SearchResult(
     val thumbnail: String? = null,
     val url: String? = null,
     val lyrics: String? = null,
+    /** Résultat LRCLIB d'un morceau sans chant (Genius ne les référence presque pas). */
+    val instrumental: Boolean = false,
 ) {
     fun toSong() = Song(artist, title, thumbnail, id, url, source)
 }

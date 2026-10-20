@@ -289,6 +289,10 @@ private fun ResultRow(result: SearchResult, modifier: Modifier, onClick: () -> U
             Text(result.artist, color = Pst.muted, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(8.dp))
+        if (result.instrumental) {
+            MonoBadge("Instrumental", Pst.accent)
+            Spacer(Modifier.width(6.dp))
+        }
         MonoBadge(sourceLabel(result.source))
         Spacer(Modifier.width(10.dp))
         Text("→", color = Pst.faint, fontSize = 16.sp)

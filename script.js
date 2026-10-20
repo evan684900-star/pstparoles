@@ -124,12 +124,23 @@ function setHalo(color) {
   halo.style.animation = 'haloIn 1.2s cubic-bezier(.2,.8,.2,1) both';
 }
 
+// Titres, artistes et URL viennent de sources externes (LRCLIB est modifiable
+// par n'importe qui) : on les neutralise avant de les insérer dans la page.
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function coverMarkup(song, big) {
   const tint = hueOf(song.title + song.artist);
   const style = `background:linear-gradient(140deg,${tint},#0a0a0c)`;
   const inner = song.thumbnail
-    ? `<img src="${song.thumbnail}" alt="" loading="lazy" />`
-    : `<span>${initials(song.artist)}</span>`;
+    ? `<img src="${escapeHtml(song.thumbnail)}" alt="" loading="lazy" />`
+    : `<span>${escapeHtml(initials(song.artist))}</span>`;
   return `<div class="cover${big ? ' cover-lg' : ''}" style="${style}">${inner}</div>`;
 }
 
@@ -139,8 +150,8 @@ function setCover(container, song) {
   const tint = hueOf(song.title + song.artist);
   container.style.background = `linear-gradient(140deg,${tint},#0a0a0c)`;
   container.innerHTML = song.thumbnail
-    ? `<img src="${song.thumbnail}" alt="" loading="lazy" />`
-    : `<span>${initials(song.artist)}</span>`;
+    ? `<img src="${escapeHtml(song.thumbnail)}" alt="" loading="lazy" />`
+    : `<span>${escapeHtml(initials(song.artist))}</span>`;
   if (container === lyricsCover) updateVinylColor(song);
 }
 
@@ -435,10 +446,11 @@ function renderResults(results) {
     li.innerHTML = `
       ${coverMarkup(song, false)}
       <div class="info">
-        <strong>${song.title}</strong>
-        <span>${song.artist}</span>
+        <strong>${escapeHtml(song.title)}</strong>
+        <span>${escapeHtml(song.artist)}</span>
       </div>
-      <span class="source">${SOURCE_LABELS[song.source] || song.source}</span>
+      ${song.instrumental ? '<span class="tag-instrumental">Instrumental</span>' : ''}
+      <span class="source">${escapeHtml(SOURCE_LABELS[song.source] || song.source)}</span>
       <span class="arrow">→</span>
     `;
     li.addEventListener('click', () => loadLyrics(song));
@@ -632,7 +644,7 @@ async function loadLyrics(song) {
   currentSong = { artist: song.artist, title: song.title, thumbnail: song.thumbnail || null, id: song.id || null };
 
   lyricsTitle.textContent = song.title;
-  lyricsArtist.innerHTML = `${song.artist} · <em>${SOURCE_LABELS[song.source] || song.source}</em>`;
+  lyricsArtist.innerHTML = `${escapeHtml(song.artist)} · <em>${escapeHtml(SOURCE_LABELS[song.source] || song.source)}</em>`;
   setCover(lyricsCover, song);
   replayVinyl();
   setHalo(hueOf(song.title + song.artist));
@@ -642,6 +654,12 @@ async function loadLyrics(song) {
 
   copyButton.classList.remove('ok');
   copyButton.textContent = 'Copier les paroles';
+
+  // La recherche LRCLIB sait déjà que le morceau n'a pas de chant.
+  if (song.instrumental) {
+    showInstrumental();
+    return;
+  }
 
   // Le repli lyrics.ovh renvoie déjà les paroles directement lors de la recherche.
   if (song.source === 'lyricsovh' && song.lyrics) {
@@ -899,9 +917,9 @@ saveButton.addEventListener('click', () => {
 });
 
 function libraryThumbMarkup(item) {
-  if (item.thumbnail) return `<img class="library-item-thumb" src="${item.thumbnail}" alt="" loading="lazy" />`;
+  if (item.thumbnail) return `<img class="library-item-thumb" src="${escapeHtml(item.thumbnail)}" alt="" loading="lazy" />`;
   const tint = hueOf(item.title + item.artist);
-  return `<div class="library-item-thumb" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,${tint},#0a0a0c);font-family:var(--serif);font-size:14px;color:rgba(0,0,0,.6)">${initials(item.artist)}</div>`;
+  return `<div class="library-item-thumb" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,${tint},#0a0a0c);font-family:var(--serif);font-size:14px;color:rgba(0,0,0,.6)">${escapeHtml(initials(item.artist))}</div>`;
 }
 
 function renderLibrary() {
@@ -915,8 +933,8 @@ function renderLibrary() {
     li.innerHTML = `
       ${libraryThumbMarkup(item)}
       <div class="library-item-info">
-        <strong>${item.title}</strong>
-        <span>${item.artist}</span>
+        <strong>${escapeHtml(item.title)}</strong>
+        <span>${escapeHtml(item.artist)}</span>
       </div>
       <button class="library-remove" type="button" aria-label="Retirer">&times;</button>
     `;
@@ -936,7 +954,7 @@ function loadFromLibrary(item) {
   currentSong = { artist: item.artist, title: item.title, thumbnail: item.thumbnail };
 
   lyricsTitle.textContent = item.title;
-  lyricsArtist.innerHTML = `${item.artist} · <em>Bibliothèque</em>`;
+  lyricsArtist.innerHTML = `${escapeHtml(item.artist)} · <em>Bibliothèque</em>`;
   setCover(lyricsCover, item);
   replayVinyl();
   setHalo(hueOf(item.title + item.artist));
@@ -1870,7 +1888,7 @@ async function followPlayingTrack(state) {
   currentSong = { artist: primaryArtist, title: state.title, thumbnail: state.coverUrl || null, id: null };
 
   lyricsTitle.textContent = state.title;
-  lyricsArtist.innerHTML = `${state.artist} · <em>Spotify</em>`;
+  lyricsArtist.innerHTML = `${escapeHtml(state.artist)} · <em>Spotify</em>`;
   setCover(lyricsCover, { title: state.title, artist: primaryArtist, thumbnail: state.coverUrl || null });
   replayVinyl();
   setHalo(hueOf(state.title + primaryArtist));

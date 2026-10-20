@@ -230,8 +230,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun openResult(result: SearchResult) =
+    fun openResult(result: SearchResult) {
+        // La recherche sait déjà que le morceau n'a pas de chant : rien à charger.
+        if (result.instrumental) {
+            resetSongState(result.toSong())
+            showLyricsScreen()
+            lyrics = LyricsContent.Instrumental
+            return
+        }
         openSong(result.toSong(), preloadedLyrics = result.lyrics?.takeIf { result.source == "lyricsovh" })
+    }
 
     private fun showPlain(text: String) {
         originalText = text

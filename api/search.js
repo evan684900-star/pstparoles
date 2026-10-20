@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { guessLyrics } = require('../lib/lyrics-sources');
+const { guessLyrics, searchLrclib, normalizeForMatch, cleanQueryText } = require('../lib/lyrics-sources');
 
 const GENIUS_ACCESS_TOKEN = process.env.GENIUS_ACCESS_TOKEN;
 
@@ -11,6 +11,11 @@ module.exports = async (req, res) => {
 
   let geniusHits = [];
   let geniusError = null;
+
+  const enabledKeys = req.query.sources ? req.query.sources.split(',').filter(Boolean) : null;
+  const lrclibEnabled = !enabledKeys || enabledKeys.includes('lrclib');
+  // Lancée en parallèle de Genius : pas d'attente supplémentaire.
+  const lrclibPromise = lrclibEnabled ? searchLrclib(query) : Promise.resolve([]);
 
   if (GENIUS_ACCESS_TOKEN) {
     try {
@@ -36,12 +41,47 @@ module.exports = async (req, res) => {
     }
   }
 
+  const lrclibHits = await lrclibPromise;
+  const keyOf = (r) => `${normalizeForMatch(cleanQueryText(r.title))}|${normalizeForMatch(r.artist)}`;
+
   if (geniusHits.length > 0) {
-    return res.status(200).json({ results: geniusHits });
+    // Genius ne référence presque pas les morceaux instrumentaux : on ajoute
+    // ceux de LRCLIB. Les versions instrumentales d'une chanson déjà trouvée
+    // ("Titre (Instrumental)") sont écartées pour ne pas encombrer.
+    const seen = new Set(geniusHits.map(keyOf));
+    const extras = [];
+    for (const hit of lrclibHits) {
+      if (!hit.instrumental) continue;
+      const key = keyOf(hit);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      extras.push(hit);
+      if (extras.length >= 5) break;
+    }
+    // Un morceau instrumental dont le titre figure dans la recherche passe en tête.
+    const q = normalizeForMatch(query);
+    const matchesQuery = (hit) => {
+      const t = normalizeForMatch(hit.title);
+      return t.length > 2 && q.includes(t);
+    };
+    return res.status(200).json({
+      results: [...extras.filter(matchesQuery), ...geniusHits, ...extras.filter((h) => !matchesQuery(h))],
+    });
   }
 
-  // Genius n'a rien trouvé (ou n'est pas disponible) : on tente les autres sources en repli.
-  const enabledKeys = req.query.sources ? req.query.sources.split(',').filter(Boolean) : null;
+  // Genius n'a rien trouvé : les résultats de LRCLIB (avec ou sans paroles).
+  if (lrclibHits.length > 0) {
+    const seen = new Set();
+    const results = lrclibHits.filter((hit) => {
+      const key = `${normalizeForMatch(hit.title)}|${normalizeForMatch(hit.artist)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 10);
+    return res.status(200).json({ results });
+  }
+
+  // Rien nulle part : on tente de deviner artiste et titre dans la saisie.
   const fallback = await guessLyrics(query, enabledKeys);
   if (fallback) {
     return res.status(200).json({

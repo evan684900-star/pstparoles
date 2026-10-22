@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { fetchLyrics, cleanQueryText } = require('../lib/lyrics-sources');
+const { fetchLyricsAny } = require('../lib/lyrics-sources');
 
 const GENIUS_ACCESS_TOKEN = process.env.GENIUS_ACCESS_TOKEN;
 
@@ -32,18 +32,11 @@ module.exports = async (req, res) => {
 
   const enabledKeys = sources ? sources.split(',').filter(Boolean) : null;
 
-  // On récupère le texte via les sources activées (LRCLIB, lyrics.ovh, ...).
-  let result = await fetchLyrics(artist, title, enabledKeys);
-
-  // Échec avec le texte brut (souvent issu de Genius, avec son "bruit"
-  // habituel) : on retente avec une version nettoyée avant d'abandonner.
-  if (!result) {
-    const cleanArtist = cleanQueryText(artist);
-    const cleanTitle = cleanQueryText(title);
-    if ((cleanArtist && cleanArtist !== artist) || (cleanTitle && cleanTitle !== title)) {
-      result = await fetchLyrics(cleanArtist || artist, cleanTitle || title, enabledKeys);
-    }
-  }
+  // On récupère le texte via les sources activées (LRCLIB, lyrics.ovh, ...),
+  // en essayant aussi des versions nettoyées du titre et de l'artiste : ceux
+  // de Genius ont souvent un "bruit" (typographie, feat., remaster...) que
+  // les bases de paroles n'ont pas.
+  const result = await fetchLyricsAny(artist, title, enabledKeys);
 
   res.setHeader('Cache-Control', 'no-store');
 

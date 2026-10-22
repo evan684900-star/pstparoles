@@ -624,6 +624,7 @@ function showTranslatableLyrics(text) {
   renderLyrics(text);
   resetTranslateBar();
   translateControl.classList.remove('hidden');
+  copyButton.classList.remove('hidden');
   saveButton.classList.remove('hidden');
   cardButton.classList.remove('hidden');
   concertButton.classList.remove('hidden');
@@ -649,6 +650,7 @@ function applyLyricsPayload(data) {
 
   resetTranslateBar();
   translateControl.classList.remove('hidden');
+  copyButton.classList.remove('hidden');
   saveButton.classList.remove('hidden');
   cardButton.classList.remove('hidden');
   concertButton.classList.remove('hidden');
@@ -723,6 +725,9 @@ function showInstrumental() {
 
 function hideLyricsExtras() {
   currentInstrumental = false;
+  // Rien à copier tant que de vraies paroles ne sont pas affichées
+  // (chargement, message d'erreur, instrumental, widget Genius).
+  copyButton.classList.add('hidden');
   translateControl.classList.add('hidden');
   saveButton.classList.add('hidden');
   cardButton.classList.add('hidden');
@@ -780,7 +785,12 @@ function showGeniusLink(url) {
   lyricsLink.classList.remove('hidden');
 }
 
+// Chaque chargement de paroles reçoit un numéro : une réponse arrivée après
+// qu'on a ouvert une autre chanson est ignorée au lieu d'écraser l'écran.
+let lyricsToken = 0;
+
 async function loadLyrics(song) {
+  const token = ++lyricsToken;
   currentSong = { artist: song.artist, title: song.title, thumbnail: song.thumbnail || null, id: song.id || null };
 
   lyricsTitle.textContent = song.title;
@@ -824,6 +834,7 @@ async function loadLyrics(song) {
   try {
     const res = await fetch(`/api/lyrics?${params.toString()}`);
     const data = await res.json();
+    if (token !== lyricsToken) return;
 
     if (!res.ok) {
       renderLyrics(data.error || 'Erreur lors du chargement des paroles.');
@@ -852,7 +863,7 @@ async function loadLyrics(song) {
     showGeniusLink(data.geniusUrl);
     updateSyncBar();
   } catch (err) {
-    renderLyrics('Erreur réseau, réessaie.');
+    if (token === lyricsToken) renderLyrics('Erreur réseau, réessaie.');
   }
 }
 
@@ -962,6 +973,7 @@ translateSelect.addEventListener('change', async () => {
   // détruirait les lignes synchronisées (et leur surlignage en cours).
   setStatus('Traduction en cours…');
   translateSelect.disabled = true;
+  const token = lyricsToken;
 
   try {
     // En mode synchronisé, la source doit être les lignes horodatées :
@@ -975,6 +987,8 @@ translateSelect.addEventListener('change', async () => {
 
     const res = await fetch(`/api/translate?${params.toString()}`);
     const data = await res.json();
+    // Entre-temps, une autre chanson a été ouverte : traduction périmée.
+    if (token !== lyricsToken) { setStatus(''); return; }
 
     const value = synced ? data.lines : data.translated;
     if (!res.ok || !applyTranslation(value, synced)) {
@@ -987,8 +1001,10 @@ translateSelect.addEventListener('change', async () => {
     setStatus('');
     translateResetBtn.classList.remove('hidden');
   } catch (err) {
-    setStatus('Erreur réseau, réessaie.', true);
-    translateSelect.value = '';
+    if (token === lyricsToken) {
+      setStatus('Erreur réseau, réessaie.', true);
+      translateSelect.value = '';
+    }
   } finally {
     translateSelect.disabled = false;
   }
@@ -1096,6 +1112,7 @@ function renderLibrary() {
 }
 
 function loadFromLibrary(item) {
+  lyricsToken++;
   currentSong = { artist: item.artist, title: item.title, thumbnail: item.thumbnail };
 
   lyricsTitle.textContent = item.title;
@@ -1709,6 +1726,10 @@ spotifyNowPlayingBtn.addEventListener('click', async () => {
 const SPOTIFY_POLL_MS = 3000;
 
 let playbackAnchor = null; // { progressMs, atPerfMs, durationMs, isPlaying, title, artist }
+// Dernier morceau vu sur Spotify depuis l'ouverture des paroles. Le premier
+// relevé sert seulement de référence : "Suivre Spotify" réagit quand le
+// morceau change, sans remplacer la chanson qu'on vient de choisir.
+let lastSeenSpotifyTrack = null;
 let spotifyPollTimer = null;
 let displayRafId = null;
 let lastRenderedSecond = -1;
@@ -1733,12 +1754,13 @@ async function refreshPlaybackAnchor() {
 
   if (!state) {
     playbackAnchor = null;
+    // Rien en lecture à l'ouverture : le prochain morceau lancé sera suivi.
+    if (lastSeenSpotifyTrack === null) lastSeenSpotifyTrack = '';
     spotifyProgress.classList.add('hidden');
     updateSyncBar();
     return;
   }
 
-  const previous = playbackAnchor;
   playbackAnchor = {
     progressMs: state.progressMs,
     atPerfMs: state.anchoredAtPerfMs,
@@ -1753,7 +1775,9 @@ async function refreshPlaybackAnchor() {
   spotifyProgress.classList.remove('hidden');
   setPlayPauseIcon(state.isPlaying);
 
-  const trackChanged = !previous || previous.title !== state.title || previous.artist !== state.artist;
+  const trackKey = `${state.title}|${state.artist}`;
+  const trackChanged = lastSeenSpotifyTrack !== null && lastSeenSpotifyTrack !== trackKey;
+  lastSeenSpotifyTrack = trackKey;
   if (trackChanged && autoFollowEnabled) {
     followPlayingTrack(state);
   }
@@ -1799,6 +1823,7 @@ function stopSpotifyProgressTracking() {
   spotifyPollTimer = null;
   displayRafId = null;
   playbackAnchor = null;
+  lastSeenSpotifyTrack = null;
   lastRenderedSecond = -1;
   spotifyProgress.classList.add('hidden');
   syncBar.classList.add('hidden');
@@ -1873,18 +1898,28 @@ function normalizeTrackName(value) {
     .trim();
 }
 
+// Titres : égalité une fois le "bruit" retiré ("One" ne doit pas valoir
+// "One More Time", sinon le surlignage suivrait le mauvais morceau).
 function tracksMatch(a, b) {
   const x = normalizeTrackName(a);
   const y = normalizeTrackName(b);
+  return !!x && x === y;
+}
+
+// Artistes : Spotify crédite "A, B" là où Genius dit "A" (ou "A & B") ; on
+// compare mot à mot pour que "Jul" ne corresponde pas à "Juliette".
+function artistsMatch(a, b) {
+  const x = normalizeTrackName(a);
+  const y = normalizeTrackName(b);
   if (!x || !y) return false;
-  return x === y || x.includes(y) || y.includes(x);
+  return ` ${x} `.includes(` ${y} `) || ` ${y} `.includes(` ${x} `);
 }
 
 function isPlayingCurrentSong() {
   if (!playbackAnchor || !currentSong) return false;
   return (
     tracksMatch(playbackAnchor.title, currentSong.title) &&
-    tracksMatch(playbackAnchor.artist, currentSong.artist)
+    artistsMatch(playbackAnchor.artist, currentSong.artist)
   );
 }
 
@@ -2025,10 +2060,11 @@ function clearSyncedLyrics() {
 async function followPlayingTrack(state) {
   // Pas besoin de passer par la recherche : /api/lyrics travaille déjà à
   // partir d'un couple artiste/titre.
-  if (currentSong && tracksMatch(state.title, currentSong.title) && tracksMatch(state.artist, currentSong.artist)) {
+  if (currentSong && tracksMatch(state.title, currentSong.title) && artistsMatch(state.artist, currentSong.artist)) {
     return;
   }
 
+  const token = ++lyricsToken;
   const primaryArtist = state.artist.split(',')[0].trim();
   currentSong = { artist: primaryArtist, title: state.title, thumbnail: state.coverUrl || null, id: null };
 
@@ -2050,6 +2086,7 @@ async function followPlayingTrack(state) {
   try {
     const res = await fetch(`/api/lyrics?${params.toString()}`);
     const data = await res.json();
+    if (token !== lyricsToken) return;
 
     if (data.lyrics) {
       applyLyricsPayload(data);
@@ -2059,7 +2096,7 @@ async function followPlayingTrack(state) {
       renderLyrics("Paroles introuvables pour cette chanson.");
     }
   } catch (err) {
-    renderLyrics('Erreur réseau, réessaie.');
+    if (token === lyricsToken) renderLyrics('Erreur réseau, réessaie.');
   }
 }
 

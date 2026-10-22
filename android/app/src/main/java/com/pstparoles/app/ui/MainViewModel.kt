@@ -14,6 +14,7 @@ import com.pstparoles.app.core.firstUrlIn
 import com.pstparoles.app.core.isYoutubeUrl
 import com.pstparoles.app.core.parseLrc
 import com.pstparoles.app.core.parseYoutubeTitle
+import com.pstparoles.app.core.artistsMatch
 import com.pstparoles.app.core.tracksMatch
 import com.pstparoles.app.core.translationCacheKey
 import com.pstparoles.app.data.ALL_SOURCE_KEYS
@@ -553,18 +554,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         pollJob?.cancel()
         pollJob = null
         playback = null
+        lastSeenTrack = null
     }
+
+    /**
+     * Dernier morceau vu sur Spotify depuis l'ouverture des paroles. Le premier
+     * relevé sert de référence : "Suivre Spotify" réagit quand le morceau
+     * change, sans remplacer la chanson qu'on vient de choisir.
+     */
+    private var lastSeenTrack: String? = null
 
     private suspend fun refreshPlayback() {
         val state = spotify.currentlyPlaying()
         spotifyConnected = spotify.isConnected
         if (state == null) {
             playback = null
+            // Rien en lecture à l'ouverture : le prochain morceau lancé sera suivi.
+            if (lastSeenTrack == null) lastSeenTrack = ""
             return
         }
-        val previous = playback
         playback = state
-        if (!state.isSameTrack(previous) && autoFollow) followPlaying(state)
+        val key = "${state.title}|${state.artist}"
+        val changed = lastSeenTrack != null && lastSeenTrack != key
+        lastSeenTrack = key
+        if (changed && autoFollow) followPlaying(state)
     }
 
     fun toggleAutoFollow() {
@@ -576,7 +589,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Charge les paroles de ce que joue Spotify, avec ses métadonnées propres. */
     private fun followPlaying(state: PlaybackState) {
         val current = song
-        if (current != null && tracksMatch(state.title, current.title) && tracksMatch(state.artist, current.artist)) return
+        if (current != null && tracksMatch(state.title, current.title) && artistsMatch(state.artist, current.artist)) return
 
         val primaryArtist = state.artist.split(',').first().trim()
         val newSong = Song(primaryArtist, state.title, state.coverUrl, source = "spotify", displayArtist = state.artist)
@@ -600,7 +613,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun isPlayingCurrentSong(): Boolean {
         val pb = playback ?: return false
         val s = song ?: return false
-        return tracksMatch(pb.title, s.title) && tracksMatch(pb.artist, s.artist)
+        return tracksMatch(pb.title, s.title) && artistsMatch(pb.artist, s.artist)
     }
 
     /** Surlignage karaoké possible : paroles horodatées et c'est bien cette chanson qui joue. */

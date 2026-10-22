@@ -30,11 +30,18 @@ fun normalizeTrackName(value: String?): String =
         .replace(Regex("""[^a-z0-9]+"""), " ")
         .trim()
 
+/** Titres : égalité une fois le "bruit" retiré ("One" ne vaut pas "One More Time"). */
 fun tracksMatch(a: String?, b: String?): Boolean {
+    val x = normalizeTrackName(a)
+    return x.isNotEmpty() && x == normalizeTrackName(b)
+}
+
+/** Artistes : "A, B" (Spotify) contient "A", mot à mot ("Jul" ne vaut pas "Juliette"). */
+fun artistsMatch(a: String?, b: String?): Boolean {
     val x = normalizeTrackName(a)
     val y = normalizeTrackName(b)
     if (x.isEmpty() || y.isEmpty()) return false
-    return x == y || x.contains(y) || y.contains(x)
+    return " $x ".contains(" $y ") || " $y ".contains(" $x ")
 }
 
 private val YOUTUBE_URL = Regex(

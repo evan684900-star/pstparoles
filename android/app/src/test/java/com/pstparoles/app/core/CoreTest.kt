@@ -63,7 +63,9 @@ class TextUtilsTest {
         assertEquals("ma chanson", normalizeTrackName("Ma Chanson (Remastered 2011)"))
         assertEquals("ete", normalizeTrackName("Été - Live"))
         assertTrue(tracksMatch("Ma Chanson - Radio Edit", "ma chanson"))
-        assertTrue(tracksMatch("Artiste A, Artiste B", "Artiste A"))
+        assertTrue(artistsMatch("Artiste A, Artiste B", "Artiste A"))
+        assertFalse(artistsMatch("Juliette", "Jul"))
+        assertFalse(tracksMatch("One More Time", "One"))
         assertFalse(tracksMatch("Une", "Autre"))
         assertFalse(tracksMatch("", "x"))
     }

@@ -1032,6 +1032,17 @@ body.concert .lyr-tr { font-size: .5em; }
 }
 
 #lyrics-link { margin-top: 20px; }
+.lyrics-retry {
+  margin-top: 14px;
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit; font-size: 14px;
+  cursor: pointer;
+}
+.lyrics-retry:hover { border-color: var(--accent); color: var(--accent); }
 #lyrics-link a { font-weight: 600; }
 
 /* ---------- footer ---------- */

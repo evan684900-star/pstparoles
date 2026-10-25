@@ -68,6 +68,8 @@ data class LyricsResponse(
     val geniusUrl: String? = null,
     /** Morceau sans chant, signalé par LRCLIB ou Genius. */
     val instrumental: Boolean = false,
+    /** Rien trouvé, mais une source était en panne : un nouvel essai peut réussir. */
+    val retryable: Boolean = false,
     val error: String? = null,
 )
 

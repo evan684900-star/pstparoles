@@ -36,9 +36,15 @@ module.exports = async (req, res) => {
   // en essayant aussi des versions nettoyées du titre et de l'artiste : ceux
   // de Genius ont souvent un "bruit" (typographie, feat., remaster...) que
   // les bases de paroles n'ont pas.
-  const result = await fetchLyricsAny(artist, title, enabledKeys);
+  const ctx = {};
+  const result = await fetchLyricsAny(artist, title, enabledKeys, ctx);
 
-  res.setHeader('Cache-Control', 'no-store');
+  // Une réponse trouvée est mise en cache par Vercel : rouvrir la chanson
+  // redonne exactement les mêmes paroles, sans dépendre de l'humeur des
+  // sources ce jour-là. Un échec n'est jamais mis en cache.
+  res.setHeader('Cache-Control', result
+    ? 'public, s-maxage=86400, stale-while-revalidate=604800'
+    : 'no-store');
 
   if (result && result.instrumental) {
     return res.status(200).json({ lyrics: null, instrumental: true, source: result.source });
@@ -65,5 +71,7 @@ module.exports = async (req, res) => {
     lyrics: null,
     embedHtml: genius.embedHtml || null,
     geniusUrl: url && url.startsWith('https://genius.com/') ? url : null,
+    // Une source était en panne : "introuvable" n'est peut-être que passager.
+    retryable: !!ctx.failed,
   });
 };

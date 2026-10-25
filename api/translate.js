@@ -9,7 +9,11 @@ function sleep(ms) {
 // on retente une fois après une courte pause avant d'abandonner.
 // Renvoie le texte brut, sans trim : le mode aligné a besoin que la
 // structure des lignes soit préservée telle quelle.
-async function translateGoogle(text, target) {
+// ctx.googleLimited : une fois Google limité pendant une requête, on ne
+// l'appelle plus pour les lignes suivantes (sinon chaque ligne refaisait
+// deux essais voués à l'échec avant de passer à MyMemory).
+async function translateGoogle(text, target, ctx = {}) {
+  if (ctx.googleLimited) return null;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const res = await axios.get('https://translate.googleapis.com/translate_a/single', {
@@ -38,6 +42,7 @@ async function translateGoogle(text, target) {
         await sleep(400);
         continue;
       }
+      if (status === 429) ctx.googleLimited = true;
       return null;
     }
   }
@@ -75,8 +80,8 @@ async function translateMyMemory(text, target) {
   return joined || null;
 }
 
-async function translateSingleLine(line, target) {
-  const viaGoogle = await translateGoogle(line, target);
+async function translateSingleLine(line, target, ctx) {
+  const viaGoogle = await translateGoogle(line, target, ctx);
   if (viaGoogle && viaGoogle.trim()) return viaGoogle.trim();
   return (await translateMyMemoryLine(line, target)) || line;
 }
@@ -84,15 +89,15 @@ async function translateSingleLine(line, target) {
 // Traduit un lot en une seule requête, et vérifie que le nombre de lignes
 // est conservé. Sinon on retombe sur du ligne par ligne pour ce lot
 // seulement : l'alignement est garanti, et le coût reste borné.
-async function translateChunk(lines, target) {
-  const raw = await translateGoogle(lines.join('\n'), target);
+async function translateChunk(lines, target, ctx) {
+  const raw = await translateGoogle(lines.join('\n'), target, ctx);
   if (raw) {
     const got = raw.split('\n').map((l) => l.trim());
     if (got.length === lines.length) return got;
   }
 
   const results = [];
-  for (const line of lines) results.push(await translateSingleLine(line, target));
+  for (const line of lines) results.push(await translateSingleLine(line, target, ctx));
   return results;
 }
 
@@ -102,6 +107,7 @@ const CONCURRENCY = 3;
 // Renvoie exactement autant de lignes qu'en entrée, pour pouvoir replacer
 // la traduction sur les horodatages des paroles synchronisées.
 async function translateLinesAligned(lines, target) {
+  const ctx = {};
   // Les lignes vides sont la première cause de désalignement : on ne les
   // envoie pas du tout et on les réinsère à la fin.
   const indices = [];
@@ -127,7 +133,7 @@ async function translateLinesAligned(lines, target) {
   async function worker() {
     while (cursor < chunks.length) {
       const chunk = chunks[cursor++];
-      const translated = await translateChunk(chunk.lines, target);
+      const translated = await translateChunk(chunk.lines, target, ctx);
       translated.forEach((text, k) => {
         out[indices[chunk.start + k]] = text;
       });

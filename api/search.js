@@ -1,5 +1,4 @@
-const axios = require('axios');
-const { guessLyrics, searchLrclib, normalizeForMatch, cleanQueryText } = require('../lib/lyrics-sources');
+const { httpGet, guessLyrics, searchLrclib, normalizeForMatch, cleanQueryText } = require('../lib/lyrics-sources');
 
 const GENIUS_ACCESS_TOKEN = process.env.GENIUS_ACCESS_TOKEN;
 
@@ -33,10 +32,11 @@ module.exports = async (req, res) => {
 
   if (GENIUS_ACCESS_TOKEN) {
     try {
-      const response = await axios.get('https://api.genius.com/search', {
+      const response = await httpGet('https://api.genius.com/search', {
         params: { q: query },
         headers: { Authorization: `Bearer ${GENIUS_ACCESS_TOKEN}` },
-      });
+        timeout: 8000,
+      }, null, 'Genius');
 
       const songs = response.data.response.hits.map((hit) => hit.result);
       geniusArtists = songs.map((song) => song.primary_artist).filter(Boolean);
@@ -55,7 +55,16 @@ module.exports = async (req, res) => {
     }
   }
 
-  const lrclibHits = await lrclibPromise;
+  const lrclibResponse = await lrclibPromise;
+  const lrclibHits = lrclibResponse || [];
+  // Les deux sources ont répondu : la même recherche doit redonner la même
+  // liste, on laisse Vercel la garder en cache une heure. Sinon (une source
+  // en panne), pas de cache, pour que la recherche suivante ait sa chance.
+  if (!geniusError && lrclibResponse) {
+    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  } else {
+    res.setHeader('Cache-Control', 'no-store');
+  }
   const artist = findQueriedArtist(query, geniusArtists);
   const keyOf = (r) => `${normalizeForMatch(cleanQueryText(r.title))}|${normalizeForMatch(r.artist)}`;
 

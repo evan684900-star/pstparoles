@@ -2,6 +2,7 @@ package com.pstparoles.app.data
 
 import com.pstparoles.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -60,7 +61,14 @@ class PstApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
             put("title", song.title)
             put("sources", sources.joinToString(","))
         }
-        return get("/api/lyrics", params, LyricsResponse.serializer())
+        val first = get("/api/lyrics", params, LyricsResponse.serializer())
+        val body = first.body
+        // Un raté passager d'une source ne doit pas suffire à dire "introuvable".
+        if (first.ok && body != null && body.lyrics == null && !body.instrumental && body.retryable) {
+            delay(1_500)
+            return get("/api/lyrics", params, LyricsResponse.serializer())
+        }
+        return first
     }
 
     /** [aligned] : une ligne traduite par ligne d'entrée, pour les paroles synchronisées. */

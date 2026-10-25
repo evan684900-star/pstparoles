@@ -785,6 +785,31 @@ function showGeniusLink(url) {
   lyricsLink.classList.remove('hidden');
 }
 
+// Appelle /api/lyrics. Quand le serveur signale qu'une source était en
+// panne (retryable) et qu'il n'a rien trouvé, on retente une fois après une
+// courte pause : un raté passager de LRCLIB ne doit pas suffire à afficher
+// "introuvable" (ou le widget Genius à la place des paroles synchronisées).
+async function fetchLyricsData(params, token) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`/api/lyrics?${params.toString()}`);
+    const data = await res.json();
+    const missing = res.ok && !data.lyrics && !data.instrumental;
+    if (!missing || !data.retryable || attempt > 0 || token !== lyricsToken) return { res, data };
+    await new Promise((ok) => setTimeout(ok, 1500));
+    if (token !== lyricsToken) return { res, data };
+  }
+}
+
+// Bouton sous un message d'échec, quand l'échec venait d'une panne passagère.
+function showLyricsRetry(onRetry) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'lyrics-retry';
+  button.textContent = 'Réessayer';
+  button.addEventListener('click', onRetry);
+  lyricsContent.appendChild(button);
+}
+
 // Chaque chargement de paroles reçoit un numéro : une réponse arrivée après
 // qu'on a ouvert une autre chanson est ignorée au lieu d'écraser l'écran.
 let lyricsToken = 0;
@@ -832,8 +857,7 @@ async function loadLyrics(song) {
   params.set('sources', getEnabledSources().join(','));
 
   try {
-    const res = await fetch(`/api/lyrics?${params.toString()}`);
-    const data = await res.json();
+    const { res, data } = await fetchLyricsData(params, token);
     if (token !== lyricsToken) return;
 
     if (!res.ok) {
@@ -853,6 +877,7 @@ async function loadLyrics(song) {
 
     if (data.embedHtml) {
       renderLyrics('');
+      if (data.retryable) showLyricsRetry(() => loadLyrics(song));
       renderGeniusEmbed(data.embedHtml);
       showGeniusLink(data.geniusUrl);
       updateSyncBar(); // aucune version horodatée ici non plus
@@ -860,6 +885,7 @@ async function loadLyrics(song) {
     }
 
     renderLyrics("Les paroles de cette chanson ne sont pas disponibles pour le moment.");
+    if (data.retryable) showLyricsRetry(() => loadLyrics(song));
     showGeniusLink(data.geniusUrl);
     updateSyncBar();
   } catch (err) {
@@ -2084,8 +2110,7 @@ async function followPlayingTrack(state) {
   });
 
   try {
-    const res = await fetch(`/api/lyrics?${params.toString()}`);
-    const data = await res.json();
+    const { data } = await fetchLyricsData(params, token);
     if (token !== lyricsToken) return;
 
     if (data.lyrics) {
@@ -2094,6 +2119,7 @@ async function followPlayingTrack(state) {
       showInstrumental();
     } else {
       renderLyrics("Paroles introuvables pour cette chanson.");
+      if (data.retryable) showLyricsRetry(() => { currentSong = null; followPlayingTrack(state); });
     }
   } catch (err) {
     if (token === lyricsToken) renderLyrics('Erreur réseau, réessaie.');

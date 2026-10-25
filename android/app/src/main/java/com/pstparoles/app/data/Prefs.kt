@@ -51,8 +51,15 @@ class Prefs(context: Context) {
 
     private val translationsSerializer = MapSerializer(String.serializer(), CachedTranslation.serializer())
 
+    /** Ignore une ancienne entrée qui contiendrait le message d'erreur du service de secours. */
     fun cachedTranslation(key: String): CachedTranslation? =
-        readJson("translations", translationsSerializer, emptyMap())[key]
+        readJson("translations", translationsSerializer, emptyMap())[key]?.takeUnless { cached ->
+            val text = cached.lines?.joinToString("\n") ?: cached.text.orEmpty()
+            TRANSLATION_ERROR.containsMatchIn(text)
+        }
+
+    private val TRANSLATION_ERROR =
+        Regex("DISTINCT LANGUAGES|MYMEMORY WARNING|QUERY LENGTH LIMIT|INVALID LANGUAGE PAIR", RegexOption.IGNORE_CASE)
 
     fun cacheTranslation(key: String, value: CachedTranslation) {
         val cache = LinkedHashMap(readJson("translations", translationsSerializer, emptyMap()))

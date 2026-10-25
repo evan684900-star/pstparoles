@@ -943,9 +943,15 @@ function readTranslationCache() {
   }
 }
 
+// Message d'erreur du service de traduction de secours, qui a pu être
+// enregistré comme traduction avant d'être filtré côté serveur.
+const TRANSLATION_ERROR_RE = /DISTINCT LANGUAGES|MYMEMORY WARNING|QUERY LENGTH LIMIT|INVALID LANGUAGE PAIR/i;
+
 function getCachedTranslation(song, target) {
   if (!song) return null;
-  return readTranslationCache()[translationCacheKey(song, target)] || null;
+  const value = readTranslationCache()[translationCacheKey(song, target)] || null;
+  const text = Array.isArray(value) ? value.join('\n') : value;
+  return text && TRANSLATION_ERROR_RE.test(text) ? null : value;
 }
 
 function cacheTranslation(song, target, value) {

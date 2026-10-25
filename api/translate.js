@@ -56,11 +56,21 @@ async function translateMyMemoryLine(line, target) {
       params: { q: line.slice(0, 490), langpair: `autodetect|${target}` },
       timeout: 6000,
     });
-    const translated = res.data && res.data.responseData && res.data.responseData.translatedText;
+    const data = res.data || {};
+    const translated = data.responseData && data.responseData.translatedText;
+    // En cas d'erreur, MyMemory renvoie son message à la place de la
+    // traduction ("PLEASE SELECT TWO DISTINCT LANGUAGES", "MYMEMORY
+    // WARNING: ...") : il ne doit jamais s'afficher dans les paroles.
+    if (/DISTINCT LANGUAGES/i.test(translated || '')) return line; // déjà dans la langue voulue
+    if (String(data.responseStatus) !== '200' || isMyMemoryError(translated)) return null;
     return translated || null;
   } catch (err) {
     return null;
   }
+}
+
+function isMyMemoryError(text) {
+  return /MYMEMORY WARNING|QUERY LENGTH LIMIT|INVALID LANGUAGE PAIR|IS AN INVALID TARGET LANGUAGE|NO QUERY SPECIFIED|AUTODETECT|DISTINCT LANGUAGES/i.test(text || '');
 }
 
 // Infrastructure différente de Google : sert de repli si Google est limité.

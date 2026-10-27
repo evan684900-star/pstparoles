@@ -2114,6 +2114,9 @@ async function followPlayingTrack(state) {
     title: state.title,
     sources: getEnabledSources().join(','),
   });
+  // La durée départage les versions d'un même titre : c'est elle qui donne
+  // les bons horodatages pour la synchro.
+  if (state.durationMs) params.set('duration', String(Math.round(state.durationMs / 1000)));
 
   try {
     const { data } = await fetchLyricsData(params, token);

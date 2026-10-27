@@ -596,7 +596,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         resetSongState(newSong)
 
         lyricsJob = viewModelScope.launch {
-            val res = api.lyrics(newSong, enabledSources)
+            val res = api.lyrics(newSong, enabledSources, state.durationMs)
             val body = res.body
             lyrics = when {
                 res.networkError -> LyricsContent.Message("Erreur réseau, réessaie.")

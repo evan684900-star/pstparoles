@@ -53,8 +53,10 @@ class PstApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
     suspend fun artist(id: Long, page: Int, sort: String) =
         get("/api/artist", mapOf("id" to id.toString(), "page" to page.toString(), "sort" to sort), ArtistResponse.serializer())
 
-    suspend fun lyrics(song: Song, sources: List<String>): ApiResult<LyricsResponse> {
+    /** [durationMs] : durée du morceau qui joue sur Spotify, pour choisir la bonne version synchronisée. */
+    suspend fun lyrics(song: Song, sources: List<String>, durationMs: Long? = null): ApiResult<LyricsResponse> {
         val params = buildMap {
+            durationMs?.takeIf { it > 0 }?.let { put("duration", ((it + 500) / 1000).toString()) }
             song.url?.let { put("url", it) }
             song.id?.let { put("id", it.toString()) }
             put("artist", song.artist)

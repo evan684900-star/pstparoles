@@ -25,6 +25,9 @@ async function fetchGeniusSong(songId) {
 
 module.exports = async (req, res) => {
   const { artist, title, url, id, sources } = req.query;
+  // Durée du morceau qui joue sur Spotify (secondes) : aide à choisir la
+  // bonne version synchronisée.
+  const duration = Math.round(Number(req.query.duration)) || null;
 
   if (!artist || !title) {
     return res.status(400).json({ error: 'Paramètres "artist" et "title" requis.' });
@@ -37,12 +40,15 @@ module.exports = async (req, res) => {
   // de Genius ont souvent un "bruit" (typographie, feat., remaster...) que
   // les bases de paroles n'ont pas.
   const ctx = {};
-  const result = await fetchLyricsAny(artist, title, enabledKeys, ctx);
+  const result = await fetchLyricsAny(artist, title, enabledKeys, ctx, duration > 0 && duration < 3600 ? duration : null);
 
   // Une réponse trouvée est mise en cache par Vercel : rouvrir la chanson
   // redonne exactement les mêmes paroles, sans dépendre de l'humeur des
-  // sources ce jour-là. Un échec n'est jamais mis en cache.
-  res.setHeader('Cache-Control', result
+  // sources ce jour-là. Un échec n'est jamais mis en cache, ni une version
+  // sans synchro obtenue pendant une panne de LRCLIB (la synchro existe
+  // peut-être, elle n'a juste pas pu être récupérée).
+  const cacheable = result && (result.synced || result.instrumental || !ctx.failed);
+  res.setHeader('Cache-Control', cacheable
     ? 'public, s-maxage=86400, stale-while-revalidate=604800'
     : 'no-store');
 

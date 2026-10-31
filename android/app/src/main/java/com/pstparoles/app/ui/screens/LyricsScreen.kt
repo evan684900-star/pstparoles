@@ -823,10 +823,20 @@ private fun SyncBar(vm: MainViewModel, state: SyncBarState) {
             modifier = Modifier.weight(1f),
         )
         if (!neutral) {
-            // Décalage manuel : afficher les paroles plus tôt / plus tard.
-            Text("−", color = Pst.muted, fontSize = 18.sp, modifier = Modifier.clip(CircleShape).clickable { vm.changeSyncOffset(-100) }.padding(horizontal = 10.dp))
-            Text(formatOffset(vm.syncOffsetMs), fontFamily = PstFonts.mono, fontSize = 11.sp, color = Pst.muted)
-            Text("+", color = Pst.muted, fontSize = 18.sp, modifier = Modifier.clip(CircleShape).clickable { vm.changeSyncOffset(100) }.padding(horizontal = 10.dp))
+            // Décalage manuel : afficher les paroles plus tôt / plus tard. Pas de
+            // 0,5 s (0,1 s ne se voyait pas, une ligne durant ~2 s) ; un appui
+            // sur la valeur la remet à zéro.
+            val shifted = vm.syncOffsetMs != 0
+            Text("−", color = Pst.muted, fontSize = 18.sp, modifier = Modifier.clip(CircleShape).clickable { vm.changeSyncOffset(-500) }.padding(horizontal = 10.dp))
+            Text(
+                formatOffset(vm.syncOffsetMs),
+                fontFamily = PstFonts.mono,
+                fontSize = 11.sp,
+                color = if (shifted) Pst.accent else Pst.muted,
+                fontWeight = if (shifted) FontWeight.SemiBold else null,
+                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { vm.setSyncOffset(0) }.padding(horizontal = 4.dp, vertical = 2.dp),
+            )
+            Text("+", color = Pst.muted, fontSize = 18.sp, modifier = Modifier.clip(CircleShape).clickable { vm.changeSyncOffset(500) }.padding(horizontal = 10.dp))
         }
     }
 }

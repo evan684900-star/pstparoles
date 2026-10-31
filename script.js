@@ -1883,16 +1883,25 @@ function getSyncOffsetMs() {
   return Number.isFinite(raw) ? raw : 0;
 }
 
+// Pas d'un appui : une ligne de paroles dure ~2 s, un pas de 0,1 s ne se
+// voyait pas du tout. 0,5 s se remarque tout de suite.
+const SYNC_OFFSET_STEP = 500;
+
 function setSyncOffsetMs(ms) {
-  const clamped = Math.max(-5000, Math.min(5000, ms));
-  localStorage.setItem(SYNC_OFFSET_KEY, String(clamped));
+  const clamped = Math.max(-10000, Math.min(10000, ms));
+  try { localStorage.setItem(SYNC_OFFSET_KEY, String(clamped)); } catch (e) {}
   renderSyncOffsetLabel();
+  // Effet immédiat, sans attendre le changement de ligne suivant.
+  activeLineIndex = -1;
+  const pos = estimatedProgressMs();
+  if (pos !== null) updateKaraokeHighlight(pos);
 }
 
 function renderSyncOffsetLabel() {
   const seconds = getSyncOffsetMs() / 1000;
   const sign = seconds > 0 ? '+' : seconds < 0 ? '−' : '';
   syncOffsetLabel.textContent = `${sign}${Math.abs(seconds).toFixed(1).replace('.', ',')} s`;
+  syncOffsetLabel.classList.toggle('shifted', seconds !== 0);
 }
 
 // Format LRC : [mm:ss.cc] texte — plusieurs horodatages possibles par ligne.
@@ -2148,15 +2157,10 @@ followButton.addEventListener('click', () => {
   if (autoFollowEnabled && playbackAnchor) followPlayingTrack(playbackAnchor);
 });
 
-syncOffsetDown.addEventListener('click', () => {
-  setSyncOffsetMs(getSyncOffsetMs() - 100);
-  activeLineIndex = -1;
-});
-
-syncOffsetUp.addEventListener('click', () => {
-  setSyncOffsetMs(getSyncOffsetMs() + 100);
-  activeLineIndex = -1;
-});
+syncOffsetDown.addEventListener('click', () => setSyncOffsetMs(getSyncOffsetMs() - SYNC_OFFSET_STEP));
+syncOffsetUp.addEventListener('click', () => setSyncOffsetMs(getSyncOffsetMs() + SYNC_OFFSET_STEP));
+// Un appui sur la valeur remet à zéro.
+syncOffsetLabel.addEventListener('click', () => setSyncOffsetMs(0));
 
 /* ---------- écran toujours allumé ---------- */
 

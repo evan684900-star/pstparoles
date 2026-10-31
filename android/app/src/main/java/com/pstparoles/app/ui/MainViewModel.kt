@@ -462,8 +462,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var syncOffsetMs by mutableIntStateOf(prefs.syncOffsetMs)
         private set
 
-    fun changeSyncOffset(deltaMs: Int) {
-        syncOffsetMs = (syncOffsetMs + deltaMs).coerceIn(-5000, 5000)
+    fun changeSyncOffset(deltaMs: Int) = setSyncOffset(syncOffsetMs + deltaMs)
+
+    fun setSyncOffset(ms: Int) {
+        syncOffsetMs = ms.coerceIn(-10_000, 10_000)
         prefs.syncOffsetMs = syncOffsetMs
     }
 

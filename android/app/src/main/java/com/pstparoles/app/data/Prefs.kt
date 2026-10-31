@@ -39,9 +39,10 @@ class Prefs(context: Context) {
         get() = sp.getInt("text_size", 19).coerceIn(15, 30)
         set(value) = sp.edit { putInt("text_size", value.coerceIn(15, 30)) }
 
+    /** Positif : la musique est en avance sur les paroles. Nouvelle clé : l'ancienne avait le sens inverse. */
     var syncOffsetMs: Int
-        get() = sp.getInt("sync_offset", 0)
-        set(value) = sp.edit { putInt("sync_offset", value.coerceIn(-5000, 5000)) }
+        get() = sp.getInt("sync_offset_v2", 0)
+        set(value) = sp.edit { putInt("sync_offset_v2", value.coerceIn(-10_000, 10_000)) }
 
     var autoFollow: Boolean
         get() = sp.getBoolean("auto_follow", false)

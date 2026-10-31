@@ -1005,6 +1005,7 @@ body.concert .lyr-tr { font-size: .5em; }
 .sync-offset button:hover { background: rgba(255,255,255,.08); color: #fff; }
 #sync-offset-label { width: auto; min-width: 46px; text-align: center; font-size: 10.5px; color: var(--faint); }
 #sync-offset-label.shifted { color: var(--accent); font-weight: 600; }
+.sync-offset-desc { display: block; margin-top: 2px; font-size: .85em; color: var(--accent); opacity: .9; }
 
 .tool.following {
   border-color: var(--spotify-green);

@@ -1869,7 +1869,10 @@ document.addEventListener('visibilitychange', () => {
 
 /* ---------- paroles synchronisées (karaoké) ---------- */
 
-const SYNC_OFFSET_KEY = 'pst-sync-offset';
+// Décalage en ms. Positif : la musique est en avance sur les paroles (on
+// avance donc les paroles) ; négatif : les paroles sont en avance. Nouvelle
+// clé : l'ancienne valeur avait le sens inverse.
+const SYNC_OFFSET_KEY = 'pst-sync-offset-v2';
 const AUTO_FOLLOW_KEY = 'pst-auto-follow';
 
 let syncedLines = [];      // [{ timeMs, text }]
@@ -1891,6 +1894,7 @@ function setSyncOffsetMs(ms) {
   const clamped = Math.max(-10000, Math.min(10000, ms));
   try { localStorage.setItem(SYNC_OFFSET_KEY, String(clamped)); } catch (e) {}
   renderSyncOffsetLabel();
+  updateSyncBar();
   // Effet immédiat, sans attendre le changement de ligne suivant.
   activeLineIndex = -1;
   const pos = estimatedProgressMs();
@@ -1997,6 +2001,21 @@ function updateSyncBar() {
   const paused = !playbackAnchor.isPlaying;
   syncBar.classList.toggle('paused', paused);
   syncStatus.textContent = paused ? 'Lecture en pause' : 'Synchronisé avec Spotify';
+  const offsetText = syncOffsetDescription();
+  if (offsetText) {
+    const detail = document.createElement('span');
+    detail.className = 'sync-offset-desc';
+    detail.textContent = offsetText;
+    syncStatus.appendChild(detail);
+  }
+}
+
+// Le décalage en clair, pour qu'on sache ce que veut dire "+1,5 s".
+function syncOffsetDescription() {
+  const ms = getSyncOffsetMs();
+  if (!ms) return '';
+  const seconds = (Math.abs(ms) / 1000).toFixed(1).replace('.', ',');
+  return ms > 0 ? `Musique en avance de ${seconds}\u00a0s` : `Paroles en avance de ${seconds}\u00a0s`;
 }
 
 function clearKaraokeClasses() {
@@ -2026,7 +2045,7 @@ function findLineIndexAt(posMs) {
 function updateKaraokeHighlight(posMs) {
   if (!karaokeAvailable()) return;
 
-  const index = findLineIndexAt(posMs - getSyncOffsetMs());
+  const index = findLineIndexAt(posMs + getSyncOffsetMs());
   if (index === activeLineIndex) return;
 
   for (const el of syncedLineEls) el.classList.remove('active', 'done', 'next');

@@ -129,7 +129,7 @@ fun LyricsScreen(vm: MainViewModel, onConnectSpotify: () -> Unit) {
             val lines = synced?.lines ?: return@derivedStateOf -1
             if (!vm.karaokeActive) return@derivedStateOf -1
             val pos = vm.playback?.estimatedProgress(clock.longValue) ?: return@derivedStateOf -1
-            findLineIndexAt(lines, pos - vm.syncOffsetMs)
+            findLineIndexAt(lines, pos + vm.syncOffsetMs)
         }
     }
 
@@ -810,8 +810,8 @@ private fun SyncBar(vm: MainViewModel, state: SyncBarState) {
         Spacer(Modifier.width(9.dp))
         Text(
             when (state) {
-                SyncBarState.Synced -> "Synchronisé avec Spotify"
-                SyncBarState.Paused -> "Lecture en pause"
+                SyncBarState.Synced -> "Synchronisé avec Spotify" + syncOffsetDescription(vm.syncOffsetMs)
+                SyncBarState.Paused -> "Lecture en pause" + syncOffsetDescription(vm.syncOffsetMs)
                 else -> if (vm.lyrics == LyricsContent.Instrumental) {
                     "Morceau instrumental : pas de paroles à suivre"
                 } else {
@@ -823,7 +823,8 @@ private fun SyncBar(vm: MainViewModel, state: SyncBarState) {
             modifier = Modifier.weight(1f),
         )
         if (!neutral) {
-            // Décalage manuel : afficher les paroles plus tôt / plus tard. Pas de
+            // Décalage manuel : + quand la musique est en avance sur les paroles,
+            // − quand ce sont les paroles qui sont en avance. Pas de
             // 0,5 s (0,1 s ne se voyait pas, une ligne durant ~2 s) ; un appui
             // sur la valeur la remet à zéro.
             val shifted = vm.syncOffsetMs != 0
@@ -839,4 +840,12 @@ private fun SyncBar(vm: MainViewModel, state: SyncBarState) {
             Text("+", color = Pst.muted, fontSize = 18.sp, modifier = Modifier.clip(CircleShape).clickable { vm.changeSyncOffset(500) }.padding(horizontal = 10.dp))
         }
     }
+}
+
+/** Le décalage en clair : "+1,5 s" = la musique est en avance sur les paroles. */
+private fun syncOffsetDescription(ms: Int): String {
+    if (ms == 0) return ""
+    val seconds = String.format(java.util.Locale.FRANCE, "%.1f", kotlin.math.abs(ms) / 1000.0)
+    // Sur sa propre ligne, avec une espace insécable pour garder "1,5 s" d'un bloc.
+    return if (ms > 0) "\nMusique en avance de $seconds\u00A0s" else "\nParoles en avance de $seconds\u00A0s"
 }

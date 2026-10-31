@@ -73,6 +73,18 @@ data class LyricsResponse(
     val error: String? = null,
 )
 
+/** Fiche renvoyée par la recherche LRCLIB (appel direct depuis l'appli). */
+@Serializable
+data class LrclibRow(
+    val trackName: String? = null,
+    val artistName: String? = null,
+    val duration: Double? = null,
+    val plainLyrics: String? = null,
+    val syncedLyrics: String? = null,
+) {
+    fun toCandidate() = com.pstparoles.app.core.LrcCandidate(trackName, artistName, duration, plainLyrics, syncedLyrics)
+}
+
 @Serializable
 data class TranslateResponse(
     val translated: String? = null,

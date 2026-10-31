@@ -132,4 +132,17 @@ class PlaybackTest {
         assertEquals(12_000, p.estimatedProgress(99_000)) // bornée à la durée
         assertEquals(10_000, p.copy(isPlaying = false).estimatedProgress(99_000))
     }
+
+    @Test fun `version synchronisee choisie en direct sur LRCLIB`() {
+        assertEquals("nicosbands" to "passion", lrclibQuery("nicosbands, Autre", "passion - Remastered 2011"))
+        val rows = listOf(
+            LrcCandidate("passion (sped up)", "nicosbands", 70.0, "x", "[00:00.10]acceleree"),
+            LrcCandidate("Passion", "Autre Artiste", 92.0, "y", "[00:00.10]mauvais artiste"),
+            LrcCandidate("passion", "nicosbands", 92.17, "p", null),
+            LrcCandidate("passion", "nicosbands", 120.0, "p", "[00:00.10]autre version"),
+            LrcCandidate("passion", "nicosbands", 92.17, "p", "[00:00.13]bonne"),
+        )
+        assertEquals("[00:00.13]bonne", pickSyncedCandidate(rows, "nicosbands", "passion", 92.0)?.syncedLyrics)
+        assertEquals(null, pickSyncedCandidate(rows.take(3), "nicosbands", "passion", 92.0))
+    }
 }

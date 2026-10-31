@@ -790,6 +790,22 @@ function showGeniusLink(url) {
 // courte pause : un raté passager de LRCLIB ne doit pas suffire à afficher
 // "introuvable" (ou le widget Genius à la place des paroles synchronisées).
 async function fetchLyricsData(params, token) {
+  const result = await fetchLyricsFromServer(params, token);
+  const { res, data } = result;
+  if (!res.ok || data.syncedLyrics || data.instrumental || token !== lyricsToken) return result;
+
+  // Pas de version synchronisée côté serveur : le navigateur la demande
+  // lui-même à LRCLIB. Le serveur du site partage son adresse avec beaucoup
+  // d'autres sur Vercel et LRCLIB le limite souvent (429) ; le navigateur,
+  // lui, passe par la connexion de l'utilisateur.
+  const synced = await fetchSyncedFromBrowser(
+    params.get('artist'), params.get('title'), Number(params.get('duration')) || null
+  );
+  if (!synced || token !== lyricsToken) return result;
+  return { res, data: { ...synced, source: 'lrclib' } };
+}
+
+async function fetchLyricsFromServer(params, token) {
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(`/api/lyrics?${params.toString()}`);
     const data = await res.json();
@@ -797,6 +813,55 @@ async function fetchLyricsData(params, token) {
     if (!missing || !data.retryable || attempt > 0 || token !== lyricsToken) return { res, data };
     await new Promise((ok) => setTimeout(ok, 1500));
     if (token !== lyricsToken) return { res, data };
+  }
+}
+
+// Versions retouchées d'un morceau (sped up, remix, live...) que le titre
+// demandé ne mentionne pas lui-même.
+const ALTERED_VERSION_RE = /\b(sped ?up|speed ?up|slowed|reverb|nightcore|remix|live|acoustic|acoustique|instrumental|karaoke|cover|8d)\b/i;
+
+function isAlteredVersion(rowTitle, wantedTitle) {
+  const found = (rowTitle || '').match(ALTERED_VERSION_RE);
+  if (!found) return false;
+  const word = found[1].toLowerCase().replace(/\s+/g, ' ?');
+  return !new RegExp(`\\b${word}\\b`, 'i').test(wantedTitle || '');
+}
+
+// Recherche directe sur LRCLIB depuis le navigateur. Ne garde qu'une fiche
+// synchronisée du même titre et du même artiste (la plus proche en durée) ;
+// le moindre souci (réseau, limite, CORS) renvoie simplement null.
+async function fetchSyncedFromBrowser(artist, title, durationSec) {
+  if (!artist || !title) return null;
+  const mainArtist = artist.split(/\s*(?:,|&|\+|\/|\bx\b|\bfeat\.?|\bft\.?)\s*/i)[0].trim() || artist;
+  const cleanTitle = stripVideoSuffix(title)
+    .replace(/\s*[([][^()[\]]*[)\]]/g, ' ')
+    .replace(/\s[-–—]\s.*$/, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() || title;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const query = new URLSearchParams({ track_name: cleanTitle, artist_name: mainArtist });
+    const res = await fetch(`https://lrclib.net/api/search?${query}`, { signal: controller.signal });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows)) return null;
+    const gap = (r) => (durationSec && r.duration ? Math.abs(r.duration - durationSec) : 0);
+    // Titre identique d'abord, puis la durée la plus proche ; les versions
+    // retouchées (sped up, remix, live...) sont écartées : leurs horodatages
+    // ne collent pas à l'original.
+    const exact = (r) => ((r.trackName || '').trim().toLowerCase() === title.trim().toLowerCase() ? 0 : 1);
+    const match = rows
+      .filter((r) => r && r.syncedLyrics && r.plainLyrics
+        && tracksMatch(r.trackName, title)
+        && artistsMatch(r.artistName, mainArtist)
+        && !isAlteredVersion(r.trackName, title))
+      .sort((x, y) => exact(x) - exact(y) || gap(x) - gap(y))[0];
+    return match ? { lyrics: match.plainLyrics.trim(), syncedLyrics: match.syncedLyrics.trim() } : null;
+  } catch (err) {
+    return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

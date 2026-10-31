@@ -69,7 +69,8 @@ module.exports = async (req, res) => {
   // Pas de version synchronisée : dernier essai avec l'écriture de Genius
   // (seulement pour LRCLIB, seule source à avoir la synchro).
   const lrclibOn = !enabledKeys || enabledKeys.includes('lrclib');
-  if (lrclibOn && !(result && (result.synced || result.instrumental))) {
+  // Inutile si LRCLIB vient de refuser (limite de débit) : ce serait pareil.
+  if (lrclibOn && !ctx.failed && !(result && (result.synced || result.instrumental))) {
     const twin = await findGeniusTwin(artist, title);
     if (twin) {
       const alt = await fetchLyricsAny(twin.artist, twin.title, ['lrclib'], ctx, dur);
@@ -98,6 +99,9 @@ module.exports = async (req, res) => {
       // surlignage synchronisé avec la lecture Spotify.
       syncedLyrics: result.synced || null,
       source: result.source,
+      // Pas de synchro et LRCLIB en panne : elle existe peut-être, le
+      // client peut aller la chercher lui-même.
+      retryable: !result.synced && !!ctx.failed,
     });
   }
 

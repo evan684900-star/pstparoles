@@ -124,3 +124,53 @@ fun wrapWords(text: String, maxWidth: Float, measure: (String) -> Float): List<S
 
 fun translationCacheKey(artist: String, title: String, target: String): String =
     "$artist|$title|$target".lowercase(Locale.ROOT)
+
+/** Fiche LRCLIB réduite à ce qui sert à choisir une version synchronisée. */
+data class LrcCandidate(
+    val trackName: String?,
+    val artistName: String?,
+    val duration: Double?,
+    val plainLyrics: String?,
+    val syncedLyrics: String?,
+)
+
+/** Artiste principal et titre nettoyé, pour interroger LRCLIB directement. */
+fun lrclibQuery(artist: String, title: String): Pair<String, String> {
+    val mainArtist = artist.split(Regex("""\s*(?:,|&|\+|/|\bx\b|\bfeat\.?|\bft\.?)\s*""", RegexOption.IGNORE_CASE))
+        .first().trim().ifEmpty { artist }
+    val cleanTitle = title
+        .replace(Regex("""\s*[(\[][^()\[\]]*[)\]]"""), " ")
+        .replace(Regex("""\s[-–—]\s.*$"""), " ")
+        .replace(Regex("""\s+"""), " ")
+        .trim()
+        .ifEmpty { title }
+    return mainArtist to cleanTitle
+}
+
+/**
+ * Version synchronisée du même titre et du même artiste, la plus proche en
+ * durée du morceau qui joue ; null s'il n'y en a pas.
+ */
+fun pickSyncedCandidate(rows: List<LrcCandidate>, artist: String, title: String, durationSec: Double?): LrcCandidate? {
+    val (mainArtist, _) = lrclibQuery(artist, title)
+    val gap = { r: LrcCandidate -> if (durationSec != null && r.duration != null) kotlin.math.abs(r.duration - durationSec) else 0.0 }
+    val exact = { r: LrcCandidate -> if (r.trackName.orEmpty().trim().equals(title.trim(), ignoreCase = true)) 0 else 1 }
+    return rows
+        .filter { !it.syncedLyrics.isNullOrBlank() && !it.plainLyrics.isNullOrBlank() }
+        .filter { tracksMatch(it.trackName, title) && artistsMatch(it.artistName, mainArtist) }
+        .filterNot { isAlteredVersion(it.trackName, title) }
+        .sortedWith(compareBy(exact).thenBy(gap))
+        .firstOrNull()
+}
+
+/** Versions retouchées (sped up, remix, live...) : horodatages décalés par rapport à l'original. */
+private val ALTERED_VERSION = Regex(
+    """\b(sped ?up|speed ?up|slowed|reverb|nightcore|remix|live|acoustic|acoustique|instrumental|karaoke|cover|8d)\b""",
+    RegexOption.IGNORE_CASE,
+)
+
+/** Version retouchée que le titre demandé ne mentionne pas lui-même. */
+fun isAlteredVersion(rowTitle: String?, wantedTitle: String): Boolean {
+    val found = ALTERED_VERSION.find(rowTitle.orEmpty()) ?: return false
+    return !Regex("""\b${Regex.escape(found.groupValues[1])}\b""", RegexOption.IGNORE_CASE).containsMatchIn(wantedTitle)
+}

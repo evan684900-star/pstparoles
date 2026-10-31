@@ -1,10 +1,14 @@
 package com.pstparoles.app.data
 
 import com.pstparoles.app.BuildConfig
+import com.pstparoles.app.core.LrcCandidate
+import com.pstparoles.app.core.lrclibQuery
+import com.pstparoles.app.core.pickSyncedCandidate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.builtins.ListSerializer
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -63,15 +67,48 @@ class PstApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
             put("title", song.title)
             put("sources", sources.joinToString(","))
         }
-        val first = get("/api/lyrics", params, LyricsResponse.serializer())
-        val body = first.body
+        var result = get("/api/lyrics", params, LyricsResponse.serializer())
+        val body = result.body
         // Un raté passager d'une source ne doit pas suffire à dire "introuvable".
-        if (first.ok && body != null && body.lyrics == null && !body.instrumental && body.retryable) {
+        if (result.ok && body != null && body.lyrics == null && !body.instrumental && body.retryable) {
             delay(1_500)
-            return get("/api/lyrics", params, LyricsResponse.serializer())
+            result = get("/api/lyrics", params, LyricsResponse.serializer())
         }
-        return first
+
+        // Pas de version synchronisée côté serveur : on la demande directement
+        // à LRCLIB. Le serveur du site partage son adresse avec beaucoup
+        // d'autres sur Vercel et LRCLIB le limite souvent ; le téléphone, non.
+        val final = result.body
+        if (result.ok && final != null && final.syncedLyrics == null && !final.instrumental) {
+            val synced = syncedFromLrclib(song.artist, song.title, durationMs?.let { it / 1000.0 })
+            if (synced != null) {
+                return result.copy(body = LyricsResponse(lyrics = synced.plainLyrics, syncedLyrics = synced.syncedLyrics, source = "lrclib"))
+            }
+        }
+        return result
     }
+
+    private suspend fun syncedFromLrclib(artist: String, title: String, durationSec: Double?): LrcCandidate? =
+        withContext(Dispatchers.IO) {
+            val (mainArtist, cleanTitle) = lrclibQuery(artist, title)
+            val url = "https://lrclib.net/api/search".toHttpUrl().newBuilder()
+                .addQueryParameter("track_name", cleanTitle)
+                .addQueryParameter("artist_name", mainArtist)
+                .build()
+            // LRCLIB demande que chaque application s'identifie.
+            val request = Request.Builder().url(url).header("User-Agent", "pstparoles-android/1.0").build()
+            try {
+                Http.client.newCall(request).execute().use { res ->
+                    if (!res.isSuccessful) return@withContext null
+                    val rows = runCatching {
+                        PstJson.decodeFromString(ListSerializer(LrclibRow.serializer()), res.body?.string().orEmpty())
+                    }.getOrNull() ?: return@withContext null
+                    pickSyncedCandidate(rows.map { it.toCandidate() }, artist, title, durationSec)
+                }
+            } catch (e: IOException) {
+                null
+            }
+        }
 
     /** [aligned] : une ligne traduite par ligne d'entrée, pour les paroles synchronisées. */
     suspend fun translate(text: String, target: String, aligned: Boolean) =

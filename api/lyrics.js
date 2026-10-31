@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { fetchLyricsAny } = require('../lib/lyrics-sources');
+const { fetchLyricsAny, httpGet, looseMatchSong, primaryArtist, cleanQueryText } = require('../lib/lyrics-sources');
 
 const GENIUS_ACCESS_TOKEN = process.env.GENIUS_ACCESS_TOKEN;
 
@@ -23,6 +23,29 @@ async function fetchGeniusSong(songId) {
   }
 }
 
+// Le même morceau tel que Genius l'écrit. Le suivi Spotify passe le titre et
+// l'artiste de Spotify ; la recherche du site, ceux de Genius. Quand le
+// premier ne mène pas à une version synchronisée, on essaie le second, pour
+// que les deux chemins trouvent la même chose.
+async function findGeniusTwin(artist, title) {
+  if (!GENIUS_ACCESS_TOKEN) return null;
+  try {
+    const res = await httpGet('https://api.genius.com/search', {
+      params: { q: `${primaryArtist(artist) || artist} ${cleanQueryText(title) || title}` },
+      headers: { Authorization: `Bearer ${GENIUS_ACCESS_TOKEN}` },
+      timeout: 6000,
+    }, null, 'Genius');
+    const hits = (res.data.response.hits || []).map((h) => h.result).filter((s) => s && s.primary_artist);
+    const twin = hits
+      .map((s) => ({ artist: s.primary_artist.name, title: s.title }))
+      .find((s) => looseMatchSong(s, { artist, title }));
+    if (!twin || (twin.artist === artist && twin.title === title)) return null;
+    return twin;
+  } catch (err) {
+    return null;
+  }
+}
+
 module.exports = async (req, res) => {
   const { artist, title, url, id, sources } = req.query;
   // Durée du morceau qui joue sur Spotify (secondes) : aide à choisir la
@@ -40,7 +63,19 @@ module.exports = async (req, res) => {
   // de Genius ont souvent un "bruit" (typographie, feat., remaster...) que
   // les bases de paroles n'ont pas.
   const ctx = {};
-  const result = await fetchLyricsAny(artist, title, enabledKeys, ctx, duration > 0 && duration < 3600 ? duration : null);
+  const dur = duration > 0 && duration < 3600 ? duration : null;
+  let result = await fetchLyricsAny(artist, title, enabledKeys, ctx, dur);
+
+  // Pas de version synchronisée : dernier essai avec l'écriture de Genius
+  // (seulement pour LRCLIB, seule source à avoir la synchro).
+  const lrclibOn = !enabledKeys || enabledKeys.includes('lrclib');
+  if (lrclibOn && !(result && (result.synced || result.instrumental))) {
+    const twin = await findGeniusTwin(artist, title);
+    if (twin) {
+      const alt = await fetchLyricsAny(twin.artist, twin.title, ['lrclib'], ctx, dur);
+      if (alt && (alt.synced || alt.instrumental || !result)) result = alt;
+    }
+  }
 
   // Une réponse trouvée est mise en cache par Vercel : rouvrir la chanson
   // redonne exactement les mêmes paroles, sans dépendre de l'humeur des

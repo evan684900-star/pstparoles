@@ -243,8 +243,7 @@ fun CoverStack(
     val angle by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(3400, easing = LinearEasing)), label = "angle")
 
     Box(modifier.padding(end = 46.dp).size(88.dp)) {
-        VinylDisc(
-            tint,
+        Box(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer {
@@ -255,7 +254,22 @@ fun CoverStack(
                     scaleY = scaleX
                     rotationZ = angle
                 },
-        )
+            contentAlignment = Alignment.Center,
+        ) {
+            VinylDisc(tint, Modifier.fillMaxSize())
+            // La pochette au centre du disque, comme l'étiquette d'un vrai
+            // vinyle ; elle tourne avec lui. La teinte reste dessous pendant
+            // le chargement de l'image.
+            if (thumbnail != null) {
+                AsyncImage(
+                    model = thumbnail,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(0.34f).clip(CircleShape),
+                )
+                Box(Modifier.size(4.dp).clip(CircleShape).background(Pst.bg))
+            }
+        }
         CoverArt(
             title, artist, thumbnail, 88.dp, 14.dp,
             Modifier.clickable(onClick = onCoverClick),

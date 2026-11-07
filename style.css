@@ -664,7 +664,9 @@ h1 {
 
 /* ---------- lyrics ---------- */
 
-#lyrics-view { animation: slideUp .5s cubic-bezier(.2,.8,.2,1) both; }
+/* Toujours au moins un écran de haut : on peut placer « ← Retour aux
+   résultats » en haut de l'écran même pendant le chargement des paroles. */
+#lyrics-view { animation: slideUp .5s cubic-bezier(.2,.8,.2,1) both; min-height: 100vh; }
 
 .back {
   display: inline-flex; align-items: center; gap: 8px;
@@ -811,11 +813,16 @@ h1 {
 .vinyl-label {
   width: 34%; height: 34%;
   border-radius: 50%;
-  background: var(--vinyl, var(--halo));
+  /* La pochette de l'album sert d'étiquette ; sa couleur dominante reste
+     en fond pendant le chargement de l'image (ou s'il n'y en a pas). */
+  background-color: var(--vinyl, var(--halo));
+  background-image: var(--vinyl-img, none);
+  background-size: cover;
+  background-position: center;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,.25);
   display: block;
   position: relative;
-  transition: background 900ms ease;
+  transition: background-color 900ms ease;
 }
 .vinyl-label::after {
   content: "";

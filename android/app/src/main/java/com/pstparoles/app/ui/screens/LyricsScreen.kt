@@ -160,10 +160,16 @@ fun LyricsScreen(vm: MainViewModel, onConnectSpotify: () -> Unit) {
     var holdTop by remember { mutableStateOf(false) }
     LaunchedEffect(vm.trackSwipe) {
         if (vm.trackSwipe == 0) return@LaunchedEffect
-        holdTop = true
         swipe.snapTo(0f)
-        listState.animateScrollToItem(0)
         swipe.animateTo(1f, tween(340, easing = FastOutSlowInEasing))
+    }
+    // Chaque chanson ouverte ou suivie : « ← Retour aux résultats » en haut de
+    // l'écran, juste au-dessus du lecteur et du titre (l'en-tête de l'appli,
+    // inutile ici, reste au-dessus).
+    val backIndex = preKeys.indexOf("back").coerceAtLeast(0)
+    LaunchedEffect(vm.songKey) {
+        holdTop = true
+        listState.animateScrollToItem(backIndex)
     }
     val density = LocalDensity.current
     val swipeModifier = Modifier.graphicsLayer {

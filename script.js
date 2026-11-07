@@ -221,6 +221,13 @@ async function updateVinylColor(song) {
   const token = ++vinylColorToken;
   // En attendant (ou sans pochette) : la teinte propre à la chanson.
   vinylSlot.style.setProperty('--vinyl', hueOf(song.title + song.artist));
+  // La pochette au centre du disque, comme l'étiquette d'un vrai vinyle.
+  if (song.thumbnail && /^https:\/\//.test(song.thumbnail)) {
+    const safe = song.thumbnail.replace(/["\\\n\r()]/g, (c) => encodeURIComponent(c));
+    vinylSlot.style.setProperty('--vinyl-img', `url("${safe}")`);
+  } else {
+    vinylSlot.style.removeProperty('--vinyl-img');
+  }
   if (!song.thumbnail) return;
 
   let color = vinylColorCache.get(song.thumbnail);
@@ -879,6 +886,20 @@ function showLyricsRetry(onRetry) {
   lyricsContent.appendChild(button);
 }
 
+// Place la page sur la vue des paroles : « ← Retour aux résultats » en haut
+// de l'écran, juste au-dessus du lecteur Spotify et du titre (l'en-tête du
+// site et la recherche, inutiles ici, restent au-dessus, hors de l'écran).
+function scrollToLyricsTop() {
+  // Position mesurée sans les transformations : la vue glisse en apparaissant
+  // (getBoundingClientRect en tiendrait compte et la page irait trop loin).
+  let anchor = backButton.offsetParent ? backButton : lyricsView;
+  let top = 0;
+  for (let el = anchor; el; el = el.offsetParent) top += el.offsetTop;
+  top = Math.max(0, top - 16);
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.scrollTo({ top, behavior: reduced ? 'auto' : 'smooth' });
+}
+
 // Chaque chargement de paroles reçoit un numéro : une réponse arrivée après
 // qu'on a ouvert une autre chanson est ignorée au lieu d'écraser l'écran.
 let lyricsToken = 0;
@@ -899,7 +920,7 @@ async function loadLyrics(song) {
   setHalo(hueOf(song.title + song.artist));
   hideLyricsExtras();
   showLyricsView();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  scrollToLyricsTop();
 
   copyButton.classList.remove('ok');
   copyButton.textContent = 'Copier les paroles';
@@ -1223,7 +1244,7 @@ function loadFromLibrary(item) {
   setHalo(hueOf(item.title + item.artist));
   hideLyricsExtras();
   showLyricsView();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  scrollToLyricsTop();
 
   copyButton.classList.remove('ok');
   copyButton.textContent = 'Copier les paroles';
@@ -2230,7 +2251,7 @@ async function followPlayingTrack(state) {
   else renderLyrics('Chargement des paroles…');
   // Chaque nouveau morceau repart du haut de la page.
   holdTopAfterTrackChange = true;
-  window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  scrollToLyricsTop();
   swipeIn(direction);
   if (ready) return;
 

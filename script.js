@@ -789,10 +789,14 @@ function showGeniusLink(url) {
 // panne (retryable) et qu'il n'a rien trouvé, on retente une fois après une
 // courte pause : un raté passager de LRCLIB ne doit pas suffire à afficher
 // "introuvable" (ou le widget Genius à la place des paroles synchronisées).
+// token : numéro du chargement en cours (lyricsToken), ou null pour un
+// préchargement en arrière-plan, qui n'est jamais périmé.
+const isStale = (token) => token !== null && token !== lyricsToken;
+
 async function fetchLyricsData(params, token) {
   const result = await fetchLyricsFromServer(params, token);
   const { res, data } = result;
-  if (!res.ok || data.syncedLyrics || data.instrumental || token !== lyricsToken) return result;
+  if (!res.ok || data.syncedLyrics || data.instrumental || isStale(token)) return result;
 
   // Pas de version synchronisée côté serveur : le navigateur la demande
   // lui-même à LRCLIB. Le serveur du site partage son adresse avec beaucoup
@@ -801,7 +805,7 @@ async function fetchLyricsData(params, token) {
   const synced = await fetchSyncedFromBrowser(
     params.get('artist'), params.get('title'), Number(params.get('duration')) || null
   );
-  if (!synced || token !== lyricsToken) return result;
+  if (!synced || isStale(token)) return result;
   return { res, data: { ...synced, source: 'lrclib' } };
 }
 
@@ -810,9 +814,9 @@ async function fetchLyricsFromServer(params, token) {
     const res = await fetch(`/api/lyrics?${params.toString()}`);
     const data = await res.json();
     const missing = res.ok && !data.lyrics && !data.instrumental;
-    if (!missing || !data.retryable || attempt > 0 || token !== lyricsToken) return { res, data };
+    if (!missing || !data.retryable || attempt > 0 || isStale(token)) return { res, data };
     await new Promise((ok) => setTimeout(ok, 1500));
-    if (token !== lyricsToken) return { res, data };
+    if (isStale(token)) return { res, data };
   }
 }
 
@@ -1411,7 +1415,8 @@ document.addEventListener('click', (e) => {
 
 const SPOTIFY_AUTH_URL = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
-const SPOTIFY_SCOPE = 'user-read-currently-playing user-modify-playback-state';
+// user-read-playback-state : file d'attente (préchargement du morceau suivant).
+const SPOTIFY_SCOPE = 'user-read-currently-playing user-read-playback-state user-modify-playback-state';
 const LS_ACCESS_TOKEN = 'spotify_access_token';
 const LS_REFRESH_TOKEN = 'spotify_refresh_token';
 const LS_EXPIRES_AT = 'spotify_expires_at';
@@ -1731,6 +1736,7 @@ spotifyNext.addEventListener('click', async () => {
 
 spotifyPrev.addEventListener('click', async () => {
   setSpotifyControlsBusy(true);
+  lastSkipBackAt = Date.now();
   const { ok, status } = await spotifyPlayerCommand('POST', 'previous');
   if (!ok) reportSpotifyCommandError(status, 'Impossible de revenir au titre précédent.');
   else setTimeout(refreshPlaybackAnchor, 450);
@@ -1878,6 +1884,7 @@ async function refreshPlaybackAnchor() {
   if (trackChanged && autoFollowEnabled) {
     followPlayingTrack(state);
   }
+  maybePrefetchNext(state);
 
   updateSyncBar();
 }
@@ -2123,6 +2130,13 @@ function updateKaraokeHighlight(posMs) {
   // On laisse la main à l'utilisateur s'il vient de faire défiler lui-même.
   const userScrolledRecently = Date.now() - lastManualScrollAt < 6000;
   if (index >= 0 && syncedLineEls[index] && !userScrolledRecently) {
+    // Juste après un changement de morceau, la page reste en haut (titre et
+    // pochette visibles) tant que la ligne chantée est à l'écran.
+    if (holdTopAfterTrackChange) {
+      const rect = syncedLineEls[index].getBoundingClientRect();
+      if (rect.bottom < window.innerHeight - 80) return;
+      holdTopAfterTrackChange = false;
+    }
     syncedLineEls[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 }
@@ -2193,6 +2207,12 @@ async function followPlayingTrack(state) {
   const primaryArtist = state.artist.split(',')[0].trim();
   currentSong = { artist: primaryArtist, title: state.title, thumbnail: state.coverUrl || null, id: null };
 
+  // Le morceau précédent glisse hors de l'écran, le nouveau arrive de l'autre côté.
+  const direction = swipeDirection();
+  const prefetched = takePrefetchedLyrics(state.title, state.artist);
+  await swipeOut(direction);
+  if (token !== lyricsToken) return;
+
   lyricsTitle.textContent = state.title;
   lyricsArtist.innerHTML = `${escapeHtml(state.artist)} · <em>Spotify</em>`;
   setCover(lyricsCover, { title: state.title, artist: primaryArtist, thumbnail: state.coverUrl || null });
@@ -2200,31 +2220,174 @@ async function followPlayingTrack(state) {
   setHalo(hueOf(state.title + primaryArtist));
   hideLyricsExtras();
   clearSyncedLyrics();
-  renderLyrics('Chargement des paroles…');
 
+  // Paroles préparées pendant le morceau précédent : déjà là, elles arrivent
+  // avec le glissement au lieu d'un "Chargement…". On ne les attend pas si
+  // elles ne sont pas encore prêtes.
+  const ready = await Promise.race([prefetched, new Promise((ok) => setTimeout(() => ok(undefined), 60))]);
+  if (token !== lyricsToken) return;
+  if (ready) showFollowedLyrics(ready, state);
+  else renderLyrics('Chargement des paroles…');
+  // Chaque nouveau morceau repart du haut de la page.
+  holdTopAfterTrackChange = true;
+  window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  swipeIn(direction);
+  if (ready) return;
+
+  try {
+    const data = (await prefetched)
+      || (await fetchLyricsData(followLyricsParams(state.title, state.artist, state.durationMs), token)).data;
+    if (token !== lyricsToken) return;
+    showFollowedLyrics(data, state);
+  } catch (err) {
+    if (token === lyricsToken) renderLyrics('Erreur réseau, réessaie.');
+  }
+}
+
+// Affiche la réponse de /api/lyrics pour un morceau suivi sur Spotify.
+function showFollowedLyrics(data, state) {
+  if (data.lyrics) {
+    applyLyricsPayload(data);
+  } else if (data.instrumental) {
+    showInstrumental();
+  } else {
+    renderLyrics("Paroles introuvables pour cette chanson.");
+    if (data.retryable) showLyricsRetry(() => { currentSong = null; followPlayingTrack(state); });
+  }
+}
+
+// Paramètres de /api/lyrics pour un morceau lu sur Spotify.
+function followLyricsParams(title, artist, durationMs) {
   const params = new URLSearchParams({
-    artist: primaryArtist,
-    title: state.title,
+    artist: artist.split(',')[0].trim(),
+    title,
     sources: getEnabledSources().join(','),
   });
   // La durée départage les versions d'un même titre : c'est elle qui donne
   // les bons horodatages pour la synchro.
-  if (state.durationMs) params.set('duration', String(Math.round(state.durationMs / 1000)));
+  if (durationMs) params.set('duration', String(Math.round(durationMs / 1000)));
+  return params;
+}
 
+/* ---------- préchargement du morceau suivant ---------- */
+
+// Dès le début d'un morceau, on demande à Spotify ce qui vient ensuite et
+// on prépare ses paroles en arrière-plan : beaucoup de morceaux commencent
+// directement par le chant, et le temps de chercher, les premières lignes
+// étaient déjà passées. On regarde à nouveau la file un peu avant la fin,
+// au cas où elle aurait changé entre-temps (morceau ajouté, lecture
+// aléatoire...) ; un morceau déjà préparé n'est pas redemandé.
+const PREFETCH_BEFORE_END_MS = 25000;
+const prefetchedLyrics = new Map(); // clé du morceau → Promise<données | null>
+const prefetchChecks = new Set(); // "début" / "fin" déjà faits pour le morceau en cours
+let prefetchTrack = null;
+
+/* ---------- animation de changement de morceau ---------- */
+
+// Sens du glissement : vers la gauche pour le morceau suivant (par défaut),
+// vers la droite juste après un appui sur "précédent".
+let lastSkipBackAt = 0;
+// Vrai juste après un changement de morceau : voir updateKaraokeHighlight.
+let holdTopAfterTrackChange = false;
+
+function swipeDirection() {
+  return Date.now() - lastSkipBackAt < 6000 ? -1 : 1;
+}
+
+function swipeTargets() {
+  return [document.querySelector('#lyrics-view .song-head'), lyricsContent].filter(Boolean);
+}
+
+const prefersReducedMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Le morceau qui part glisse et s'efface (180 ms).
+async function swipeOut(direction) {
+  if (lyricsView.hidden || prefersReducedMotion() || !Element.prototype.animate) return;
+  const animations = swipeTargets().map((el) => el.animate(
+    [{ transform: 'translateX(0)', opacity: 1 }, { transform: `translateX(${-direction * 70}px)`, opacity: 0 }],
+    { duration: 180, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' }
+  ));
+  try { await Promise.all(animations.map((a) => a.finished)); } catch (err) { /* annulée */ }
+}
+
+// Le nouveau arrive de l'autre côté.
+function swipeIn(direction) {
+  for (const el of swipeTargets()) {
+    if (el.getAnimations) el.getAnimations().forEach((a) => a.cancel());
+    if (prefersReducedMotion() || !el.animate) continue;
+    el.animate(
+      [{ transform: `translateX(${direction * 70}px)`, opacity: 0 }, { transform: 'translateX(0)', opacity: 1 }],
+      { duration: 340, easing: 'cubic-bezier(.2,.8,.2,1)' }
+    );
+  }
+}
+
+function trackKey(title, artist) {
+  return `${normalizeTrackName(title)}|${normalizeTrackName(artist.split(',')[0])}`;
+}
+
+function maybePrefetchNext(state) {
+  if (!autoFollowEnabled || !state.isPlaying) return;
+  const current = `${state.title}|${state.artist}`;
+  if (prefetchTrack !== current) {
+    prefetchTrack = current;
+    prefetchChecks.clear();
+  }
+  const nearEnd = state.durationMs && state.durationMs - state.progressMs <= PREFETCH_BEFORE_END_MS;
+  const moment = nearEnd ? 'fin' : 'début';
+  if (prefetchChecks.has(moment)) return;
+  prefetchChecks.add(moment);
+  if (nearEnd) prefetchChecks.add('début');
+
+  fetchNextInQueue().then((next) => {
+    if (!next) return;
+    const key = trackKey(next.title, next.artist);
+    // Même morceau en boucle : ses paroles sont déjà à l'écran.
+    if (key === trackKey(state.title, state.artist)) return;
+    if (prefetchedLyrics.has(key)) return;
+    const params = followLyricsParams(next.title, next.artist, next.durationMs);
+    prefetchedLyrics.set(key, fetchLyricsData(params, null)
+      .then(({ res, data }) => (res.ok && (data.lyrics || data.instrumental) ? data : null))
+      .catch(() => null));
+    // On ne garde que les derniers préchargements.
+    while (prefetchedLyrics.size > 4) prefetchedLyrics.delete(prefetchedLyrics.keys().next().value);
+    // La pochette aussi, pour qu'elle s'affiche sans attendre.
+    if (next.coverUrl) new Image().src = next.coverUrl;
+  });
+}
+
+// Paroles préchargées pour ce morceau, ou null (pas préparées, ou ratées).
+async function takePrefetchedLyrics(title, artist) {
+  const key = trackKey(title, artist);
+  const pending = prefetchedLyrics.get(key);
+  if (!pending) return null;
+  prefetchedLyrics.delete(key);
+  return pending;
+}
+
+// Premier morceau de la file d'attente Spotify (null si inconnu ou si ce
+// n'est pas une chanson : podcast, pub...).
+async function fetchNextInQueue() {
   try {
-    const { data } = await fetchLyricsData(params, token);
-    if (token !== lyricsToken) return;
-
-    if (data.lyrics) {
-      applyLyricsPayload(data);
-    } else if (data.instrumental) {
-      showInstrumental();
-    } else {
-      renderLyrics("Paroles introuvables pour cette chanson.");
-      if (data.retryable) showLyricsRetry(() => { currentSong = null; followPlayingTrack(state); });
-    }
+    // Pas de renouvellement du jeton ici : le suivi de la lecture s'en
+    // charge déjà, et un échec ne doit jamais déconnecter Spotify pour un
+    // simple préchargement.
+    const token = await getValidSpotifyToken();
+    if (!token) return null;
+    const res = await fetch('https://api.spotify.com/v1/me/player/queue', { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const next = data && Array.isArray(data.queue) ? data.queue[0] : null;
+    if (!next || !next.name || !Array.isArray(next.artists)) return null;
+    const images = (next.album && next.album.images) || [];
+    return {
+      title: next.name,
+      artist: next.artists.map((a) => a.name).join(', '),
+      durationMs: next.duration_ms || 0,
+      coverUrl: (images[0] && images[0].url) || null,
+    };
   } catch (err) {
-    if (token === lyricsToken) renderLyrics('Erreur réseau, réessaie.');
+    return null;
   }
 }
 

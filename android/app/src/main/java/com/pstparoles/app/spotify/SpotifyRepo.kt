@@ -34,7 +34,8 @@ class SpotifyRepo(private val prefs: Prefs, private val api: PstApi) {
         private const val AUTH_URL = "https://accounts.spotify.com/authorize"
         private const val TOKEN_URL = "https://accounts.spotify.com/api/token"
         private const val PLAYER_URL = "https://api.spotify.com/v1/me/player"
-        private const val SCOPE = "user-read-currently-playing user-modify-playback-state"
+        // user-read-playback-state : file d'attente (préchargement du morceau suivant).
+        private const val SCOPE = "user-read-currently-playing user-read-playback-state user-modify-playback-state"
     }
 
     private var cachedClientId: String? = null
@@ -169,6 +170,38 @@ class SpotifyRepo(private val prefs: Prefs, private val api: PstApi) {
     }
 
     /**
+     * Premier morceau de la file d'attente Spotify, ou null (inconnu, podcast,
+     * pub...). Pas de renouvellement de jeton ici : un échec ne doit jamais
+     * déconnecter Spotify pour un simple préchargement.
+     */
+    suspend fun nextInQueue(): QueuedTrack? {
+        val token = validToken() ?: return null
+        return withContext(Dispatchers.IO) {
+            try {
+                Http.client.newCall(
+                    Request.Builder().url("$PLAYER_URL/queue").header("Authorization", "Bearer $token").build()
+                ).execute().use { res ->
+                    if (!res.isSuccessful) return@withContext null
+                    val json = PstJson.parseToJsonElement(res.body?.string().orEmpty()).jsonObject
+                    val next = json["queue"]?.jsonArray?.firstOrNull() as? JsonObject ?: return@withContext null
+                    val artists = (next["artists"]?.jsonArray ?: return@withContext null)
+                        .mapNotNull { (it as? JsonObject)?.get("name")?.jsonPrimitive?.content }
+                    val title = next["name"]?.jsonPrimitive?.content ?: return@withContext null
+                    QueuedTrack(
+                        title = title,
+                        artist = artists.joinToString(", "),
+                        durationMs = next["duration_ms"]?.jsonPrimitive?.longOrNull ?: 0L,
+                        coverUrl = (next["album"] as? JsonObject)?.get("images")?.jsonArray
+                            ?.firstOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content,
+                    )
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    /**
      * Commande du lecteur ("play", "pause", "next", "previous"). Renvoie le
      * code HTTP : 403 = compte non Premium, 404 = aucun appareil actif.
      */
@@ -190,3 +223,6 @@ class SpotifyRepo(private val prefs: Prefs, private val api: PstApi) {
         }
     }
 }
+
+/** Morceau à venir dans la file d'attente Spotify. */
+data class QueuedTrack(val title: String, val artist: String, val durationMs: Long, val coverUrl: String?)

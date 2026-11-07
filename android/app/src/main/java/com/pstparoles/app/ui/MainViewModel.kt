@@ -12,6 +12,7 @@ import com.pstparoles.app.core.LrcLine
 import com.pstparoles.app.core.PlaybackState
 import com.pstparoles.app.core.firstUrlIn
 import com.pstparoles.app.core.isYoutubeUrl
+import com.pstparoles.app.core.normalizeTrackName
 import com.pstparoles.app.core.parseLrc
 import com.pstparoles.app.core.parseYoutubeTitle
 import com.pstparoles.app.core.artistsMatch
@@ -27,7 +28,10 @@ import com.pstparoles.app.data.PstApi
 import com.pstparoles.app.data.SearchResult
 import com.pstparoles.app.data.Song
 import com.pstparoles.app.spotify.SpotifyRepo
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -227,6 +231,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Relance l'animation du vinyle à chaque nouvelle chanson. */
     var songKey by mutableIntStateOf(0)
         private set
+    /** Incrémenté à chaque changement de morceau suivi sur Spotify : déclenche le glissement. */
+    var trackSwipe by mutableIntStateOf(0)
+        private set
+    /** Sens du glissement : 1 = morceau suivant (vers la gauche), -1 = après "précédent". */
+    var swipeDirection by mutableIntStateOf(1)
+        private set
+    private var lastSkipBackAt = 0L
 
     /** Texte d'origine (sert à copier, enregistrer et traduire). */
     private var originalText = ""
@@ -580,6 +591,47 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val changed = lastSeenTrack != null && lastSeenTrack != key
         lastSeenTrack = key
         if (changed && autoFollow) followPlaying(state)
+        maybePrefetchNext(state)
+    }
+
+    // ===================== préchargement du morceau suivant =====================
+
+    /**
+     * Dès le début d'un morceau, la file Spotify donne le suivant et ses
+     * paroles sont préparées en arrière-plan : beaucoup de morceaux commencent
+     * directement par le chant. La file est revérifiée à 25 s de la fin, au
+     * cas où elle aurait changé ; un morceau déjà préparé n'est pas redemandé.
+     */
+    private val prefetched = LinkedHashMap<String, Deferred<LyricsResponse?>>()
+    private val prefetchChecks = mutableSetOf<String>()
+    private var prefetchTrack: String? = null
+
+    private fun trackKey(title: String, artist: String) =
+        normalizeTrackName(title) + "|" + normalizeTrackName(artist.split(',').first())
+
+    private fun maybePrefetchNext(state: PlaybackState) {
+        if (!autoFollow || !state.isPlaying) return
+        val current = "${state.title}|${state.artist}"
+        if (prefetchTrack != current) {
+            prefetchTrack = current
+            prefetchChecks.clear()
+        }
+        val nearEnd = state.durationMs > 0 && state.durationMs - state.progressMs <= 25_000
+        if (!prefetchChecks.add(if (nearEnd) "fin" else "debut")) return
+        if (nearEnd) prefetchChecks.add("debut")
+
+        viewModelScope.launch {
+            val next = spotify.nextInQueue() ?: return@launch
+            val key = trackKey(next.title, next.artist)
+            // Même morceau en boucle : ses paroles sont déjà à l'écran.
+            if (key == trackKey(state.title, state.artist) || prefetched.containsKey(key)) return@launch
+            val nextSong = Song(next.artist.split(',').first().trim(), next.title, next.coverUrl, source = "spotify")
+            prefetched[key] = viewModelScope.async {
+                val res = api.lyrics(nextSong, enabledSources, next.durationMs)
+                res.body?.takeIf { res.ok && (it.lyrics != null || it.instrumental) }
+            }
+            while (prefetched.size > 4) prefetched.remove(prefetched.keys.first())
+        }
     }
 
     fun toggleAutoFollow() {
@@ -589,6 +641,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Charge les paroles de ce que joue Spotify, avec ses métadonnées propres. */
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun followPlaying(state: PlaybackState) {
         val current = song
         if (current != null && tracksMatch(state.title, current.title) && artistsMatch(state.artist, current.artist)) return
@@ -596,19 +649,40 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val primaryArtist = state.artist.split(',').first().trim()
         val newSong = Song(primaryArtist, state.title, state.coverUrl, source = "spotify", displayArtist = state.artist)
         resetSongState(newSong)
+        swipeDirection = if (System.currentTimeMillis() - lastSkipBackAt < 6_000) -1 else 1
+        trackSwipe++
+
+        // Paroles préparées pendant le morceau précédent : affichées tout de
+        // suite, elles arrivent avec le glissement au lieu d'un "Chargement…".
+        val ready = prefetched.remove(trackKey(state.title, state.artist))
+        if (ready != null && ready.isCompleted) {
+            val body = runCatching { ready.getCompleted() }.getOrNull()
+            if (body != null) {
+                showFollowed(body, networkError = false)
+                return
+            }
+        }
 
         lyricsJob = viewModelScope.launch {
-            val res = api.lyrics(newSong, enabledSources, state.durationMs)
-            val body = res.body
-            lyrics = when {
-                res.networkError -> LyricsContent.Message("Erreur réseau, réessaie.")
-                body?.lyrics != null -> {
-                    applyPayload(body)
-                    lyrics
-                }
-                body?.instrumental == true -> LyricsContent.Instrumental
-                else -> LyricsContent.Message("Paroles introuvables pour cette chanson.")
+            val early = ready?.let { runCatching { it.await() }.getOrNull() }
+            if (early != null) {
+                showFollowed(early, networkError = false)
+                return@launch
             }
+            val res = api.lyrics(newSong, enabledSources, state.durationMs)
+            showFollowed(res.body, res.networkError)
+        }
+    }
+
+    private fun showFollowed(body: LyricsResponse?, networkError: Boolean) {
+        lyrics = when {
+            networkError -> LyricsContent.Message("Erreur réseau, réessaie.")
+            body?.lyrics != null -> {
+                applyPayload(body)
+                lyrics
+            }
+            body?.instrumental == true -> LyricsContent.Instrumental
+            else -> LyricsContent.Message("Paroles introuvables pour cette chanson.")
         }
     }
 
@@ -643,7 +717,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun skipNext() = runCommand("next", 450, "Impossible de passer au titre suivant.")
 
-    fun skipPrevious() = runCommand("previous", 450, "Impossible de revenir au titre précédent.")
+    fun skipPrevious() {
+        lastSkipBackAt = System.currentTimeMillis()
+        runCommand("previous", 450, "Impossible de revenir au titre précédent.")
+    }
 
     private fun runCommand(path: String, settleMs: Long, fallback: String, onError: () -> Unit = {}) {
         viewModelScope.launch {

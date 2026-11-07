@@ -10,6 +10,8 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -75,6 +77,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -151,6 +154,24 @@ fun LyricsScreen(vm: MainViewModel, onConnectSpotify: () -> Unit) {
     }
     val firstLineIndex = preKeys.size
 
+    // ---------- changement de morceau suivi sur Spotify : glissement + retour en haut ----------
+    val swipe = remember { Animatable(1f) }
+    // Juste après un changement, la page reste en haut tant que la ligne chantée est à l'écran.
+    var holdTop by remember { mutableStateOf(false) }
+    LaunchedEffect(vm.trackSwipe) {
+        if (vm.trackSwipe == 0) return@LaunchedEffect
+        holdTop = true
+        swipe.snapTo(0f)
+        listState.animateScrollToItem(0)
+        swipe.animateTo(1f, tween(340, easing = FastOutSlowInEasing))
+    }
+    val density = LocalDensity.current
+    val swipeModifier = Modifier.graphicsLayer {
+        val p = swipe.value
+        translationX = (1f - p) * vm.swipeDirection * with(density) { 70.dp.toPx() }
+        alpha = p
+    }
+
     // ---------- défilement automatique, sauf si l'utilisateur vient de défiler lui-même ----------
     var lastManualScroll by remember { mutableLongStateOf(0L) }
     LaunchedEffect(listState) {
@@ -165,6 +186,10 @@ fun LyricsScreen(vm: MainViewModel, onConnectSpotify: () -> Unit) {
         val info = listState.layoutInfo
         val viewport = info.viewportEndOffset - info.viewportStartOffset
         val visible = info.visibleItemsInfo.firstOrNull { it.index == target }
+        if (holdTop) {
+            if (visible != null && visible.offset + visible.size < info.viewportEndOffset - 80) return@LaunchedEffect
+            holdTop = false
+        }
         if (visible != null) {
             listState.animateScrollBy((visible.offset + visible.size / 2 - viewport / 2).toFloat(), tween(450))
         } else {
@@ -207,14 +232,14 @@ fun LyricsScreen(vm: MainViewModel, onConnectSpotify: () -> Unit) {
                         )
                         "banner" -> SpotifyBanner(onConnect = onConnectSpotify, onDismiss = { vm.bannerDismissed = true })
                         "progress" -> SpotifyPanel(vm, clock)
-                        "song" -> SongHead(vm)
+                        "song" -> Box(swipeModifier) { SongHead(vm) }
                         "toolbar" -> Toolbar(vm)
                         "sync" -> SyncBar(vm, syncState)
                     }
                 }
             }
 
-            lyricsItems(vm, activeIndex, textSizeSp)
+            lyricsItems(vm, activeIndex, textSizeSp, swipeModifier)
 
             if (!vm.concert) {
                 item(key = "footer") {
@@ -234,25 +259,25 @@ fun LyricsScreen(vm: MainViewModel, onConnectSpotify: () -> Unit) {
 
 // ============================ paroles ============================
 
-private fun LazyListScope.lyricsItems(vm: MainViewModel, activeIndex: Int, textSizeSp: Float) {
+private fun LazyListScope.lyricsItems(vm: MainViewModel, activeIndex: Int, textSizeSp: Float, swipeModifier: Modifier) {
     when (val content = vm.lyrics) {
         LyricsContent.None -> Unit
 
         is LyricsContent.Loading -> item(key = "loading") {
-            Text(content.message, fontFamily = PstFonts.serif, fontSize = textSizeSp.sp, color = Pst.muted)
+            Text(content.message, fontFamily = PstFonts.serif, fontSize = textSizeSp.sp, color = Pst.muted, modifier = swipeModifier)
         }
 
         is LyricsContent.Message -> item(key = "message") {
-            Column {
+            Column(swipeModifier) {
                 Text(content.text, fontFamily = PstFonts.serif, fontSize = textSizeSp.sp, color = Pst.lyric, lineHeight = 1.5.em)
                 content.geniusUrl?.let { GeniusLink(it) }
             }
         }
 
-        LyricsContent.Instrumental -> item(key = "instrumental") { InstrumentalBlock(textSizeSp) }
+        LyricsContent.Instrumental -> item(key = "instrumental") { Box(swipeModifier) { InstrumentalBlock(textSizeSp) } }
 
         is LyricsContent.Embed -> item(key = "embed") {
-            Column {
+            Column(swipeModifier) {
                 Text("Paroles via le widget officiel Genius :", color = Pst.muted, fontSize = 13.sp)
                 Spacer(Modifier.height(10.dp))
                 GeniusEmbed(content.html)
@@ -263,7 +288,7 @@ private fun LazyListScope.lyricsItems(vm: MainViewModel, activeIndex: Int, textS
         is LyricsContent.Plain -> {
             val lines = content.text.split('\n')
             itemsIndexed(lines, key = { i, _ -> "plain$i" }) { i, line ->
-                LyricLine(vm, i, line, null, LineStatus.Idle, synced = false, textSizeSp)
+                Box(swipeModifier) { LyricLine(vm, i, line, null, LineStatus.Idle, synced = false, textSizeSp) }
             }
         }
 
@@ -277,7 +302,7 @@ private fun LazyListScope.lyricsItems(vm: MainViewModel, activeIndex: Int, textS
                     i == activeIndex + 1 -> LineStatus.Next
                     else -> LineStatus.Idle
                 }
-                LyricLine(vm, i, line.text, content.translations?.getOrNull(i), status, synced = karaoke, textSizeSp)
+                Box(swipeModifier) { LyricLine(vm, i, line.text, content.translations?.getOrNull(i), status, synced = karaoke, textSizeSp) }
             }
         }
     }

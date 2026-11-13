@@ -1233,6 +1233,15 @@ body.concert .back { display: none !important; }
    et défileraient avec les paroles au lieu de rester à l'écran. */
 body.concert #lyrics-view { animation: none; transform: none; }
 
+/* Le halo reste à l'écran pendant que les paroles défilent, et brille
+   par-dessus la barre du haut (en mode "screen", il éclaire sans masquer
+   le titre). */
+body.concert .halo {
+  position: fixed;
+  z-index: 61;
+  mix-blend-mode: screen;
+}
+
 body.concert main {
   max-width: 1000px;
   padding-top: calc(72px + var(--safe-top));

@@ -1715,6 +1715,15 @@ async function spotifyPlayerCommand(method, path) {
 function setPlayPauseIcon(isPlaying) {
   playPauseIconPlay.classList.toggle('hidden', isPlaying);
   playPauseIconPause.classList.toggle('hidden', !isPlaying);
+  setPlaybackIndicator(isPlaying ? 'playing' : 'paused');
+}
+
+// Petites barres à côté du titre (carte Spotify, mode concert) : elles
+// s'animent pendant la lecture et redeviennent des points en pause. Leur
+// mouvement est décoratif : le site n'a pas accès au son lui-même.
+function setPlaybackIndicator(state) {
+  if (state) document.documentElement.dataset.playback = state;
+  else delete document.documentElement.dataset.playback;
 }
 
 function setSpotifyControlsBusy(busy) {
@@ -1881,6 +1890,7 @@ async function refreshPlaybackAnchor() {
     // Rien en lecture à l'ouverture : le prochain morceau lancé sera suivi.
     if (lastSeenSpotifyTrack === null) lastSeenSpotifyTrack = '';
     spotifyProgress.classList.add('hidden');
+    setPlaybackIndicator(null);
     updateSyncBar();
     return;
   }
@@ -1951,6 +1961,7 @@ function stopSpotifyProgressTracking() {
   lastSeenSpotifyTrack = null;
   lastRenderedSecond = -1;
   spotifyProgress.classList.add('hidden');
+  setPlaybackIndicator(null);
   syncBar.classList.add('hidden');
 }
 

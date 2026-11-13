@@ -69,7 +69,9 @@ import com.pstparoles.app.ui.theme.Pst
 import com.pstparoles.app.ui.theme.PstFonts
 import com.pstparoles.app.ui.theme.songTint
 import kotlinx.coroutines.delay
+import kotlin.math.PI
 import kotlin.math.ceil
+import kotlin.math.sin
 import kotlin.random.Random
 
 val EaseOutSoft = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
@@ -199,6 +201,38 @@ fun EqBars(modifier: Modifier = Modifier) {
         }
     }
 }
+
+/**
+ * Petites barres à côté du titre, comme sur l'iPhone : elles s'animent
+ * pendant la lecture et redeviennent des points en pause. Leur mouvement est
+ * décoratif : l'appli n'a pas accès au son joué par Spotify.
+ */
+@Composable
+fun PlaybackIndicator(playing: Boolean, modifier: Modifier = Modifier, color: Color = Pst.text) {
+    val transition = rememberInfiniteTransition(label = "playEq")
+    // Un cycle de 4 s ; chaque barre fait un nombre entier d'oscillations par
+    // cycle, la boucle ne saute donc jamais.
+    val phase by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(4000, easing = LinearEasing)), label = "phase")
+    val level by animateFloatAsState(if (playing) 1f else 0f, tween(350), label = "level")
+    Canvas(modifier.size(width = 24.dp, height = 14.dp)) {
+        val bar = 2.5.dp.toPx()
+        val gap = (size.width - 6 * bar) / 5
+        for (i in 0 until 6) {
+            val wave = 0.5f + 0.5f * sin(2 * PI * (phase * EQ_TURNS[i] + EQ_OFFSETS[i])).toFloat()
+            val target = 0.3f + 0.65f * wave
+            val h = size.height * (0.2f + (target - 0.2f) * level)
+            drawRoundRect(
+                color.copy(alpha = 0.9f),
+                topLeft = Offset(i * (bar + gap), (size.height - h) / 2),
+                size = Size(bar, h),
+                cornerRadius = CornerRadius(bar / 2),
+            )
+        }
+    }
+}
+
+private val EQ_TURNS = intArrayOf(5, 3, 6, 4, 7, 3)
+private val EQ_OFFSETS = floatArrayOf(0f, 0.37f, 0.71f, 0.13f, 0.52f, 0.88f)
 
 /** Disque vinyle : sillons, reflets et étiquette à la couleur de la chanson. */
 @Composable

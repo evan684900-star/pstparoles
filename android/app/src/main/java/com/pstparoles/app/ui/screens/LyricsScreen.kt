@@ -98,6 +98,7 @@ import com.pstparoles.app.ui.MainViewModel
 import com.pstparoles.app.ui.SyncBarState
 import com.pstparoles.app.ui.components.CoverStack
 import com.pstparoles.app.ui.components.Header
+import com.pstparoles.app.ui.components.PlaybackIndicator
 import com.pstparoles.app.ui.components.PstIcons
 import com.pstparoles.app.ui.components.ToolButton
 import com.pstparoles.app.ui.theme.Pst
@@ -752,14 +753,18 @@ private fun SpotifyPanel(vm: MainViewModel, clock: State<Long>) {
             Spacer(Modifier.width(6.dp))
             Text("EN ÉCOUTE", color = Pst.spotify, fontFamily = PstFonts.mono, fontSize = 11.sp, letterSpacing = 0.6.sp, fontWeight = FontWeight.Medium)
         }
-        Text(
-            "${pb.title} — ${pb.artist}",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 5.dp, bottom = 8.dp),
-        )
+        Row(Modifier.padding(top = 5.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "${pb.title} — ${pb.artist}",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(10.dp))
+            PlaybackIndicator(playing = pb.isPlaying)
+        }
         Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.1f))) {
             Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().clip(RoundedCornerShape(999.dp)).background(Pst.spotify))
         }

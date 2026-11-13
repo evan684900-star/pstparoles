@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -275,10 +276,16 @@ fun ConcertBar(vm: MainViewModel, modifier: Modifier = Modifier) {
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f, fill = false)) {
                 Text(song.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(song.displayArtist ?: song.artist, color = Pst.muted, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            // Juste à droite du titre, quand Spotify joue quelque chose.
+            vm.playback?.let {
+                Spacer(Modifier.width(14.dp))
+                PlaybackIndicator(playing = it.isPlaying)
+            }
+            Spacer(Modifier.weight(1f))
             CloseCircle({ vm.concert = false })
         }
     }

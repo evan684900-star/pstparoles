@@ -1181,8 +1181,10 @@ main:has(#lyrics-view:not([hidden])) .legal { display: none; }
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: calc(10px + var(--safe-top)) clamp(14px, 4vw, 26px) 10px;
-  background: linear-gradient(180deg, rgba(10,10,12,.96), rgba(10,10,12,.7) 70%, transparent);
+  padding: calc(10px + var(--safe-top)) clamp(14px, 4vw, 26px) 24px;
+  /* Opaque derrière le titre, puis fondu : les paroles qui remontent
+     disparaissent sous la barre au lieu de se mélanger au titre. */
+  background: linear-gradient(180deg, rgba(10,10,12,.98), rgba(10,10,12,.95) 72%, rgba(10,10,12,0));
 }
 body.concert .concert-bar { display: flex; }
 
@@ -1226,11 +1228,44 @@ body.concert #genius-embed-wrapper,
 body.concert #lyrics-link,
 body.concert .back { display: none !important; }
 
+/* L'animation d'apparition de la vue laisse une transformation en place :
+   les éléments "fixés" (barre du haut, lecteur) se fixeraient alors à la vue
+   et défileraient avec les paroles au lieu de rester à l'écran. */
+body.concert #lyrics-view { animation: none; transform: none; }
+
 body.concert main {
   max-width: 1000px;
   padding-top: calc(72px + var(--safe-top));
   padding-bottom: 45vh; /* la dernière ligne peut monter au centre de l'écran */
 }
+
+/* Lecteur Spotify : en mode concert, il quitte le fil de la page (où il
+   défilait sous la barre du haut et s'y mélangeait) pour devenir un petit
+   lecteur fixé en bas de l'écran. Le titre est déjà dans la barre du haut. */
+body.concert #spotify-progress:not(.hidden) {
+  position: fixed;
+  z-index: 60;
+  left: 0; right: 0;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  width: min(520px, calc(100% - 28px));
+  margin: 0 auto;
+  padding: 10px 16px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "controls bar" "controls times";
+  column-gap: 16px;
+  align-items: center;
+  background: rgba(9, 16, 11, .97);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 14px 34px -14px rgba(0,0,0,.9);
+  animation: none;
+}
+body.concert .spotify-progress-top,
+body.concert #spotify-progress-track { display: none; }
+body.concert .spotify-controls { grid-area: controls; margin-top: 0; }
+body.concert .spotify-progress-bar { grid-area: bar; align-self: end; }
+body.concert .spotify-progress-times { grid-area: times; align-self: start; }
 
 body.concert #lyrics-content { gap: 10px; }
 body.concert #lyrics-content p {
@@ -1238,6 +1273,8 @@ body.concert #lyrics-content p {
   line-height: 1.5;
   text-align: center;
 }
+/* Agrandie depuis son centre, la ligne en cours ne déborde pas de l'écran. */
+body.concert #lyrics-content.synced p { transform-origin: center; }
 body.concert #lyrics-content.synced p.active { transform: scale(1.06); }
 
 /* ---------- carte de citation ---------- */

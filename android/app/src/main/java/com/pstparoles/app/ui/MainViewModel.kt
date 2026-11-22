@@ -534,7 +534,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 spotifyConnected = spotify.isConnected
                 return@launch
             }
-            search("${state.artist} ${state.title}")
+            // Ouvre directement le morceau, comme le suivi Spotify (titre et
+            // artiste exacts, durée, version synchronisée préférée), au lieu de
+            // chercher tous les artistes bout à bout, que Genius ne trouvait pas.
+            query = "${state.artist.split(',').first().trim()} ${state.title}"
+            pushRecent(query)
+            song = null
+            showLyricsScreen()
+            followPlaying(state)
         }
     }
 

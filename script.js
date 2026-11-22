@@ -1844,8 +1844,18 @@ spotifyNowPlayingBtn.addEventListener('click', async () => {
       setStatus(playbackIssueMessage(), true);
       return;
     }
-    input.value = `${track.artist} ${track.title}`;
-    runSearch(input.value);
+    // On ouvre directement le morceau, comme le suivi Spotify : titre et
+    // artiste exacts de Spotify, durée, version synchronisée préférée. Avant,
+    // on lançait une recherche avec tous les artistes bout à bout ("Lyn,
+    // アトラスサウンドチーム, ATLUS GAME MUSIC Life Will Change"), que Genius
+    // ne trouvait pas : le site retombait sur une devinette approximative.
+    const primary = track.artist.split(',')[0].trim();
+    input.value = `${primary} ${track.title}`;
+    pushRecent(input.value);
+    setStatus('');
+    currentSong = null;
+    followPlayingTrack(track);
+    showLyricsView();
   } finally {
     spotifyNowPlayingBtn.disabled = false;
   }

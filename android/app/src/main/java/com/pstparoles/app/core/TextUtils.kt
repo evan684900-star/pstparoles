@@ -38,10 +38,12 @@ fun tracksMatch(a: String?, b: String?): Boolean {
 
 /** Artistes : "A, B" (Spotify) contient "A", mot à mot ("Jul" ne vaut pas "Juliette"). */
 fun artistsMatch(a: String?, b: String?): Boolean {
-    val x = normalizeTrackName(a)
-    val y = normalizeTrackName(b)
-    if (x.isEmpty() || y.isEmpty()) return false
-    return " $x ".contains(" $y ") || " $y ".contains(" $x ")
+    // Spotify liste parfois plusieurs artistes ("Lyn, アトラスサウンドチーム,
+    // ATLUS GAME MUSIC") là où Genius n'en garde qu'un, écrit à sa façon
+    // ("Lyn Inaizumi") : il suffit qu'un artiste de chaque côté corresponde.
+    fun split(v: String?) = v.orEmpty().split(',').map { normalizeTrackName(it) }.filter { it.isNotEmpty() }
+    val right = split(b)
+    return split(a).any { x -> right.any { y -> " $x ".contains(" $y ") || " $y ".contains(" $x ") } }
 }
 
 private val YOUTUBE_URL = Regex(

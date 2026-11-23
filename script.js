@@ -411,11 +411,12 @@ async function runYoutubeSearch(url) {
   }
 }
 
+// Renvoie les résultats affichés (ou null si rien / erreur).
 async function runSearch(query) {
   query = (query || '').trim();
-  if (!query) return;
+  if (!query) return null;
 
-  if (YOUTUBE_URL_RE.test(query)) { runYoutubeSearch(query); return; }
+  if (YOUTUBE_URL_RE.test(query)) { runYoutubeSearch(query); return null; }
 
   pushRecent(query);
   resultsEl.innerHTML = '';
@@ -431,15 +432,17 @@ async function runSearch(query) {
     const data = await res.json();
     skeletons.hidden = true;
 
-    if (!res.ok) { setStatus(data.error || 'Erreur inconnue.', true); return; }
-    if (!data.results || data.results.length === 0) { setStatus('Aucun résultat trouvé.', true); return; }
+    if (!res.ok) { setStatus(data.error || 'Erreur inconnue.', true); return null; }
+    if (!data.results || data.results.length === 0) { setStatus('Aucun résultat trouvé.', true); return null; }
 
     lastResults = data.results;
     setStatus(data.results.length + ' résultats');
     renderResults(data.results, data.artist);
+    return data.results;
   } catch (err) {
     skeletons.hidden = true;
     setStatus('Erreur réseau, réessaie.', true);
+    return null;
   }
 }
 
@@ -945,6 +948,8 @@ async function loadLyrics(song) {
   params.set('artist', song.artist);
   params.set('title', song.title);
   params.set('sources', getEnabledSources().join(','));
+  // Morceau ouvert depuis Spotify : la durée choisit la bonne version synchronisée.
+  if (song.durationMs) params.set('duration', String(Math.round(song.durationMs / 1000)));
 
   try {
     const { res, data } = await fetchLyricsData(params, token);
@@ -1844,18 +1849,35 @@ spotifyNowPlayingBtn.addEventListener('click', async () => {
       setStatus(playbackIssueMessage(), true);
       return;
     }
-    // On ouvre directement le morceau, comme le suivi Spotify : titre et
-    // artiste exacts de Spotify, durée, version synchronisée préférée. Avant,
-    // on lançait une recherche avec tous les artistes bout à bout ("Lyn,
-    // アトラスサウンドチーム, ATLUS GAME MUSIC Life Will Change"), que Genius
-    // ne trouvait pas : le site retombait sur une devinette approximative.
-    const primary = track.artist.split(',')[0].trim();
-    input.value = `${primary} ${track.title}`;
-    pushRecent(input.value);
-    setStatus('');
-    currentSong = null;
-    followPlayingTrack(track);
-    showLyricsView();
+    // Recherche par le titre seul (tous les artistes bout à bout, "Lyn,
+    // アトラスサウンドチーム, ATLUS GAME MUSIC Life Will Change", ne
+    // trouvaient rien), puis vérification des résultats avec les artistes de
+    // Spotify : même titre et l'un des artistes du morceau.
+    input.value = track.title;
+    const results = await runSearch(track.title) || [];
+    const artists = track.artist.split(',').map((a) => a.trim()).filter(Boolean);
+    // Versions retouchées écartées ("Life Will Change (Instrumental Mix)"),
+    // titre identique en priorité.
+    const matches = (r) => tracksMatch(r.title, track.title)
+      && artists.some((a) => artistsMatch(r.artist, a))
+      && !isAlteredVersion(r.title, track.title);
+    const sameTitle = (r) => (r.title || '').trim().toLowerCase() === track.title.trim().toLowerCase();
+    const candidates = results.filter(matches);
+    const match = candidates.find(sameTitle) || candidates[0];
+    if (match) {
+      // Le bon morceau en tête de liste, pour "← Retour aux résultats".
+      const ranked = [match, ...results.filter((r) => r !== match)];
+      lastResults = ranked;
+      renderResults(ranked);
+      loadLyrics({ ...match, thumbnail: match.thumbnail || track.coverUrl, durationMs: track.durationMs });
+    } else {
+      // Aucun résultat de ces artistes : on ouvre le morceau directement avec
+      // les informations de Spotify, comme le suivi.
+      setStatus('');
+      currentSong = null;
+      followPlayingTrack(track);
+      showLyricsView();
+    }
   } finally {
     spotifyNowPlayingBtn.disabled = false;
   }
@@ -2068,10 +2090,11 @@ function tracksMatch(a, b) {
 // Artistes : Spotify crédite "A, B" là où Genius dit "A" (ou "A & B") ; on
 // compare mot à mot pour que "Jul" ne corresponde pas à "Juliette".
 function artistsMatch(a, b) {
-  const x = normalizeTrackName(a);
-  const y = normalizeTrackName(b);
-  if (!x || !y) return false;
-  return ` ${x} `.includes(` ${y} `) || ` ${y} `.includes(` ${x} `);
+  // Spotify liste parfois plusieurs artistes ("Lyn, アトラスサウンドチーム,
+  // ATLUS GAME MUSIC") là où Genius n'en garde qu'un, écrit à sa façon
+  // ("Lyn Inaizumi") : il suffit qu'un artiste de chaque côté corresponde.
+  const split = (v) => (v || '').split(',').map(normalizeTrackName).filter(Boolean);
+  return split(a).some((x) => split(b).some((y) => ` ${x} `.includes(` ${y} `) || ` ${y} `.includes(` ${x} `)));
 }
 
 function isPlayingCurrentSong() {

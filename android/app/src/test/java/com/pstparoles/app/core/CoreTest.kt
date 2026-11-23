@@ -65,6 +65,8 @@ class TextUtilsTest {
         assertTrue(tracksMatch("Ma Chanson - Radio Edit", "ma chanson"))
         assertTrue(artistsMatch("Artiste A, Artiste B", "Artiste A"))
         assertFalse(artistsMatch("Juliette", "Jul"))
+        assertTrue(artistsMatch("Lyn, アトラスサウンドチーム, ATLUS GAME MUSIC", "Lyn Inaizumi"))
+        assertFalse(artistsMatch("アトラスサウンドチーム", "X"))
         assertFalse(tracksMatch("One More Time", "One"))
         assertFalse(tracksMatch("Une", "Autre"))
         assertFalse(tracksMatch("", "x"))

@@ -11,6 +11,7 @@ import com.pstparoles.app.card.QuoteCardRenderer
 import com.pstparoles.app.core.LrcLine
 import com.pstparoles.app.core.PlaybackState
 import com.pstparoles.app.core.firstUrlIn
+import com.pstparoles.app.core.isAlteredVersion
 import com.pstparoles.app.core.isYoutubeUrl
 import com.pstparoles.app.core.normalizeTrackName
 import com.pstparoles.app.core.parseLrc
@@ -129,24 +130,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         pushRecent(q)
         searchJob?.cancel()
-        searchJob = viewModelScope.launch {
-            results = emptyList()
-            searchArtist = null
-            artistPage = null
-            homeStatus = null
-            searching = true
-            val res = api.search(q, enabledSources)
-            searching = false
-            val body = res.body
-            when {
-                res.networkError -> homeStatus = "Erreur réseau, réessaie." to true
-                !res.ok -> homeStatus = (body?.error ?: "Erreur inconnue.") to true
-                body == null || body.results.isEmpty() -> homeStatus = "Aucun résultat trouvé." to true
-                else -> {
-                    results = body.results
-                    searchArtist = body.artist
-                    homeStatus = "${body.results.size} résultats" to false
-                }
+        searchJob = viewModelScope.launch { runSearch(q) }
+    }
+
+    /** Lance la recherche et affiche les résultats ; les renvoie (null si rien ou erreur). */
+    private suspend fun runSearch(q: String): List<SearchResult>? {
+        results = emptyList()
+        searchArtist = null
+        artistPage = null
+        homeStatus = null
+        searching = true
+        val res = api.search(q, enabledSources)
+        searching = false
+        val body = res.body
+        return when {
+            res.networkError -> { homeStatus = "Erreur réseau, réessaie." to true; null }
+            !res.ok -> { homeStatus = (body?.error ?: "Erreur inconnue.") to true; null }
+            body == null || body.results.isEmpty() -> { homeStatus = "Aucun résultat trouvé." to true; null }
+            else -> {
+                results = body.results
+                searchArtist = body.artist
+                homeStatus = "${body.results.size} résultats" to false
+                body.results
             }
         }
     }
@@ -275,7 +280,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         lyrics = LyricsContent.Loading()
     }
 
-    fun openSong(newSong: Song, preloadedLyrics: String? = null) {
+    /** [durationMs] : durée du morceau qui joue sur Spotify, pour choisir la bonne version synchronisée. */
+    fun openSong(newSong: Song, preloadedLyrics: String? = null, durationMs: Long? = null) {
         resetSongState(newSong)
         showLyricsScreen()
 
@@ -286,7 +292,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         lyricsJob = viewModelScope.launch {
-            val res = api.lyrics(newSong, enabledSources)
+            val res = api.lyrics(newSong, enabledSources, durationMs)
             val body = res.body
             when {
                 res.networkError -> lyrics = LyricsContent.Message("Erreur réseau, réessaie.")
@@ -534,14 +540,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 spotifyConnected = spotify.isConnected
                 return@launch
             }
-            // Ouvre directement le morceau, comme le suivi Spotify (titre et
-            // artiste exacts, durée, version synchronisée préférée), au lieu de
-            // chercher tous les artistes bout à bout, que Genius ne trouvait pas.
-            query = "${state.artist.split(',').first().trim()} ${state.title}"
+            // Recherche par le titre seul (tous les artistes bout à bout ne
+            // trouvaient rien), puis vérification des résultats avec les
+            // artistes de Spotify : même titre et l'un des artistes du morceau.
+            query = state.title
             pushRecent(query)
-            song = null
-            showLyricsScreen()
-            followPlaying(state)
+            searchJob?.cancel()
+            val found = runSearch(state.title).orEmpty()
+            val artists = state.artist.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            // Versions retouchées écartées ("Life Will Change (Instrumental Mix)"),
+            // titre identique en priorité.
+            val candidates = found.filter { r ->
+                tracksMatch(r.title, state.title) && artists.any { artistsMatch(r.artist, it) } && !isAlteredVersion(r.title, state.title)
+            }
+            val match = candidates.firstOrNull { it.title.trim().equals(state.title.trim(), ignoreCase = true) } ?: candidates.firstOrNull()
+            if (match != null) {
+                // Le bon morceau en tête de liste, pour le retour aux résultats.
+                results = listOf(match) + found.filter { it !== match }
+                if (match.instrumental) {
+                    openResult(match)
+                } else {
+                    openSong(
+                        match.toSong().copy(thumbnail = match.thumbnail ?: state.coverUrl),
+                        preloadedLyrics = match.lyrics?.takeIf { match.source == "lyricsovh" },
+                        durationMs = state.durationMs,
+                    )
+                }
+            } else {
+                // Aucun résultat de ces artistes : ouverture directe avec les
+                // informations de Spotify, comme le suivi.
+                song = null
+                showLyricsScreen()
+                followPlaying(state)
+            }
         }
     }
 
